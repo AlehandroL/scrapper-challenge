@@ -1,0 +1,12 @@
+HTTP/2 200 
+server: nginx
+date: Wed, 12 Aug 2026 22:47:55 GMT
+content-type: application/octet-stream
+x-ua-compatible: IE=8; IE=11; chrome=1
+cache-control: no-cache, no-store, must-revalidate
+pragma: no-cache
+expires: Thu, 01 Jan 1970 00:00:00 GMT
+content-disposition: attachment;filename="RTFA N° 264-2012.pdf"
+
+# --- primeros bytes del cuerpo (magic number) ---
+0000000    %   P   D   F   -   1   .   4                                

@@ -1,0 +1,145 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head id="j_idt2"><link type="text/css" rel="stylesheet" href="/repdig/javax.faces.resource/theme.css.xhtml?ln=primefaces-omega" /><script type="text/javascript" src="/repdig/javax.faces.resource/jquery/jquery.js.xhtml;jsessionid=SESSION_ID_REDACTED?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript" src="/repdig/javax.faces.resource/jquery/jquery-plugins.js.xhtml;jsessionid=SESSION_ID_REDACTED?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript" src="/repdig/javax.faces.resource/core.js.xhtml;jsessionid=SESSION_ID_REDACTED?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><link type="text/css" rel="stylesheet" href="/repdig/javax.faces.resource/components.css.xhtml;jsessionid=SESSION_ID_REDACTED?ln=primefaces&amp;v=6.0&amp;v=6.0" /><script type="text/javascript" src="/repdig/javax.faces.resource/components.js.xhtml;jsessionid=SESSION_ID_REDACTED?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript">if(window.PrimeFaces){PrimeFaces.settings.locale='es';}</script>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<title>Repositorio Digital OEFA</title>
+		<script language="JavaScript" type="text/JavaScript">
+			function exportar() {
+				return true;
+			}
+		</script>
+		<link rel="shortcut icon" href="/repdig/images/favicon.ico" type="image/x-icon" />
+		<link href="/repdig/styles/jquery.ui.custom.min.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/cssMenuTabla.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/cssConsultaExterna.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/jquery.timeentry.css" rel="stylesheet" type="text/css" />
+
+		<script type="text/javascript" src="/repdig/scripts/jquery.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery-ui.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.dcmegamenu.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jsFuncionesComunes.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jsValidaInputs.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.plugin.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.timeentry.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.timeentry-es.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.redirect.min.js"></script></head><body>
+		<!-- celeste oscuro raa 3184C6 -->
+
+		<div id="page">
+			<div id="header" style="border: 0px; border-style: solid; border-color: red; background-color: #FFFFFF">
+				<div class="left_header">
+					<img src="/repdig/images/logoOefa.png" height="55px" border="0" style="margin-top: 14px; margin-left: 10px;" alt="Organismo de Evaluación y Fiscalización Ambiental" />
+				</div>
+				<div class="center_header"></div>
+				<div style="width: 800px; position: absolute; top: 0px; left: 50%; margin-left: -400px; font-size: 20px; font-family: Verdana; color: #144AA7;">
+					<br /> <b>Repositorio Digital OEFA</b>
+				</div>
+				<div class="right_header"></div>
+				<div id="menu" style="border: 0px; border-style: solid; border-color: blue; box-shadow: 0 10px 10px -10px #000;">
+				</div>
+			</div>
+
+			<table class="menutabla">
+				<tr>
+					<td>
+						<a href="/repdig/consulta/consultaDfsai.xhtml">Resoluciones Directorales de la DFSAI</a>
+					</td>
+					<td>
+						<a href="/repdig/consulta/consultaTfa.xhtml">Resoluciones del Tribunal de Fiscalización Ambiental</a>
+					</td>
+				</tr>
+			</table>
+
+			<div id="main"><div id="j_idt10"></div><script id="j_idt10_s" type="text/javascript">$(function(){PrimeFaces.cw("AjaxStatus","widget_j_idt10",{id:"j_idt10",start:function(){PF('statusDialog').show()},success:function(){PF('statusDialog').hide()}});});</script><div id="j_idt11" class="ui-dialog ui-widget ui-widget-content ui-corner-all ui-shadow ui-hidden-container"><div class="ui-dialog-content ui-widget-content">
+					<img height="100" src="/repdig/images/ajaxLogout.gif" /></div></div><script id="j_idt11_s" type="text/javascript">$(function(){PrimeFaces.cw("Dialog","statusDialog",{id:"j_idt11",draggable:false,resizable:false,modal:true});});</script>
+				<table class="tablainferior">
+					<tr>
+						<td valign="top"><br /> <br /> <br /></td>
+						<td><body style="text-align: center;">
+<form id="listarDetalleInfraccionRAAForm" name="listarDetalleInfraccionRAAForm" method="post" action="/repdig/consulta/consultaTfa.xhtml;jsessionid=SESSION_ID_REDACTED" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="listarDetalleInfraccionRAAForm" value="listarDetalleInfraccionRAAForm" />
+
+				<div id="ContentMain">
+
+					<table class="titulocuadrado">
+						<tr>
+							<td>RESOLUCIONES DEL TRIBUNAL DE FISCALIZACIÓN AMBIENTAL</td>
+						</tr>
+					</table>
+					<br />
+					<table>
+						<tr>
+							<td valign="top"><fieldset class="fieldset-raa">
+
+									<table border="0" class="tablaFiltros" style="width: 100%">
+										<tr>
+											<td colspan="2"></td>
+										</tr>
+										<tr>
+											<th>Número de expediente </th>
+										</tr>
+										<tr>
+											<td><input id="listarDetalleInfraccionRAAForm:txtNroexp" type="text" name="listarDetalleInfraccionRAAForm:txtNroexp" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Administrado </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt21" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Unidad fiscalizable </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt25" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Sector </th>
+										</tr>
+										<tr>
+											<td><select id="listarDetalleInfraccionRAAForm:idsector" name="listarDetalleInfraccionRAAForm:idsector" class="cajaTexto" size="1" style="width:180px">	<option value="">--Todos--</option>
+	<option value="2">ELECTRICIDAD</option>
+	<option value="3">HIDROCARBUROS</option>
+	<option value="9">INDUSTRIA</option>
+	<option value="1">MINERIA</option>
+	<option value="8">PESQUERIA</option>
+</select></td>
+										</tr>
+										<tr>
+											<th>Nro. Resolución de Apelación </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt34" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<td colspan="1" width="100%" align="center" style="text-align: center"><br /><button id="listarDetalleInfraccionRAAForm:btnBuscar" name="listarDetalleInfraccionRAAForm:btnBuscar" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only btnControl_buscar" onclick="PrimeFaces.ab({s:&quot;listarDetalleInfraccionRAAForm:btnBuscar&quot;,u:&quot;listarDetalleInfraccionRAAForm:pgLista listarDetalleInfraccionRAAForm:txtNroexp&quot;});return false;" type="submit"><span class="ui-button-text ui-c">Buscar</span></button><script id="listarDetalleInfraccionRAAForm:btnBuscar_s" type="text/javascript">PrimeFaces.cw("CommandButton","widget_listarDetalleInfraccionRAAForm_btnBuscar",{id:"listarDetalleInfraccionRAAForm:btnBuscar"});</script></td>
+										</tr>
+									</table>
+
+								</fieldset></td>
+							<td valign="top"><span id="listarDetalleInfraccionRAAForm:pgLista"><div id="listarDetalleInfraccionRAAForm:dt" class="ui-datatable ui-widget ui-datatable-scrollable" style="margin-bottom:20px;width:100%;"><div class="ui-widget-header ui-datatable-scrollable-header"><div class="ui-datatable-scrollable-header-box"><table role="grid" class="grillaFlat"><thead id="listarDetalleInfraccionRAAForm:dt_head"><tr role="row"><th id="listarDetalleInfraccionRAAForm:dt:j_idt41" class="ui-state-default" role="columnheader" aria-label="Nro." style="text-align:center;vertical-align:top;;width:5%"><span class="ui-column-title"><span class="cabeceraGrilla">Nro.</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt44" class="ui-state-default" role="columnheader" aria-label="Número de expediente" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Número de expediente</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt47" class="ui-state-default" role="columnheader" aria-label="Administrado" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Administrado</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt50" class="ui-state-default" role="columnheader" aria-label="Unidad fiscalizable" style="text-align: justify;vertical-align:top;;width:20%"><span class="ui-column-title"><span class="cabeceraGrilla">Unidad fiscalizable</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt53" class="ui-state-default" role="columnheader" aria-label="Sector" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Sector</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt56" class="ui-state-default" role="columnheader" aria-label="Nro. Resolución de Apelación" style="text-align:left;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Nro. Resolución de Apelación</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt60" class="ui-state-default" role="columnheader" aria-label="Archivo" style="text-align: center;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Archivo</span></span></th></tr></thead></table></div></div><div class="ui-datatable-scrollable-body" tabindex="-1"><table role="grid" class="grillaFlat"><tbody id="listarDetalleInfraccionRAAForm:dt_data" class="ui-datatable-data ui-widget-content"><tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7"></td></tr></tbody></table></div><div class="ui-widget-header ui-datatable-scrollable-footer"><div class="ui-datatable-scrollable-footer-box"><table role="grid" class="grillaFlat"></table></div></div><div id="listarDetalleInfraccionRAAForm:dt_paginator_bottom" class="ui-paginator ui-paginator-bottom ui-widget-header ui-corner-bottom" role="navigation" aria-label="Pagination"><span class="ui-paginator-current">Página 1 de 1 (0 registros)</span><a href="#" class="ui-paginator-first ui-state-default ui-corner-all ui-state-disabled" aria-label="First Page"><span class="ui-icon ui-icon-seek-first">p</span></a><a href="#" class="ui-paginator-prev ui-state-default ui-corner-all ui-state-disabled" aria-label="Previous Page"><span class="ui-icon ui-icon-seek-prev">p</span></a><span class="ui-paginator-pages"></span><a href="#" class="ui-paginator-next ui-state-default ui-corner-all ui-state-disabled" aria-label="Next Page"><span class="ui-icon ui-icon-seek-next">p</span></a><a href="#" class="ui-paginator-last ui-state-default ui-corner-all ui-state-disabled" aria-label="Last Page"><span class="ui-icon ui-icon-seek-end">p</span></a>
+											<div style="float: right">
+											</div></div><input type="hidden" id="listarDetalleInfraccionRAAForm:dt_scrollState" name="listarDetalleInfraccionRAAForm:dt_scrollState" autocomplete="off" value="0,0" /></div><script id="listarDetalleInfraccionRAAForm:dt_s" type="text/javascript">$(function(){PrimeFaces.cw("DataTable","widget_listarDetalleInfraccionRAAForm_dt",{id:"listarDetalleInfraccionRAAForm:dt",paginator:{id:['listarDetalleInfraccionRAAForm:dt_paginator_bottom'],rows:10,rowCount:0,page:0,currentPageTemplate:'Página {currentPage} de {totalPages} ({totalRecords} registros)'},scrollable:true,liveScroll:false,scrollStep:0,scrollLimit:0,liveScrollBuffer:0});});</script></span></td>
+						</tr>
+					</table>
+
+				</div><input type="hidden" name="javax.faces.ViewState" id="j_id1:javax.faces.ViewState:0" value="Z4puIucPMuPlc+J6AhVfJ5Pi7WSjccLARZ/mXkKpbB2iqiu3wOgM7t3dP1GRFcdbKbE2RoiMmGNRciCUZETBoI/798uOuyTkFn+TgDt1SFWm6Jr0gAkVnw5uM24U3s+KVb/nJIZJ4y/cUng0vLhHtayVD44gmew/juXR+KufeYA7Tdx2/Ow6psafwg6zdtfbNwcibo2wnbx1SOPGUBrFHhirFzCd0eGqUxzaHd+ThmQ6JzLPjLfI6rrVnArvri75wPqai8Yz0MHCFtiERFgUyevYsogzluMSPGI138oXu0Cyr3IQjiwkUif8n9HT86cOrewfg0roXtWcgRYvq3GqdzD13g+S1vCz/VL3klwIEVBSl711WvF3VnqkJ7GrB0ERgJ8pGRo8QcHxrlirh2WXFHnjVeVywu2LfBGnvBCFI2FQmZDT1YKRTiW85mUCqEEQRjVlk7kk8Q43DTBEsf+ZLKIxShhlwcl3aGSd5YNYFHb7aFeOE0Rxw9NXAWtQ/OKu/eUYTH0vVhKACnbLVvApas+F0Oipfm0TSwtn6rNH5ITKpiNdnO5vI0agBK/9F9SknPtl5vFg4UUPbnpf9zIETeEa1+gR/NCgl5yZl3deBseqB5rdcy1SvZrE/bVCLiLheBnVnQni/HLqggGZEwMuJgDR5K3VGyQfLs4Cf2kJ6QILiP+B/qVg/SX008KC6NfJFJZG1b33MnlpK/HnJ4zxPYdKSgYFFNmXN5h/OoxrjNqJ3FkBTdYizwsSVV9iAEjq2D6GKFFZMeLr68llwYl8buo4Xy7iVkRapJgGbOxHOY12Xe3retZiQBhAIjhgvn8PH6KMpO1+GLHHSDJcnFL8QiGuyddtIug1+p2WgHzkdulHzIwzuyUuN2ETIL1s8MWkW5VqWmF190xwW/dzD16GmxLE47SApjJVbTj84Ag+dr4djY6+NMPHyH6fJOv1wPTdD8baRcduICCNdM+M3FWvbDeSPYBm1UgKSaLIa0Fw5ETg0P6SJPbxmEiPvSjAVyLMHZodjXi342hJsoW24XOaZf8EeuqzfheUcuv/EUL0PVf6qqVZNJ97QI7pAuwUb3ncOZ2qoBZCQis90Nt3efB0+pL9zQcpaG0NV7Xi5IC7MwyebVqfWIYYN98VdhYgBKyc1nPx50DtR58EuZcIevDAoONLW1dYChbIwjep54KhtkNn+ZeoDvApTEgJHYKclgsONXEGQfl29ZE2YC5EQawopWLmHrzSla8LAo9ND0nD5rzJZXJ0OT86b8lYm+FJHWHQisFPKU/nMMQwkh6jEsnMUWQJM3imlf1g1434kuywlJ73d8YWu4MconE5ITrBZRh1WlLiLrzNl2OWz78r1DR+Ljpw9dMhAGenMMLbtBpeLx17XOVtoS0PFj9Lc0zdGiO4nkFy35lSnr2aS+0UWEmergEh9xetieeTYun+esfDkUk=" autocomplete="off" />
+</form></body></td>
+					</tr>
+				</table>
+
+			</div>
+			<div id="footer">
+				<table width="100%" cellpadding="0" cellspacing="0">
+					<tr>
+						<td height="31" align="center" valign="middle" style="font-family: arial; font-size: 10px; color: #FFF; font-weight: bold">
+							Organismo de Evaluación y Fiscalización Ambiental - OEFA, Lima -
+							Perú<br /> Oficina de Tecnologías de la Información (OTI) |
+							Copyright © - 2017 Todos los derechos reservados<br />
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+		<div id="divMsgMain" style="display: none"></div></body>
+</html>

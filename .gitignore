@@ -1,0 +1,11 @@
+# Evidencia generada por scripts/check-access.sh — se acumula localmente,
+# cada quien la produce desde su propia red.
+evidencia/
+
+# Los PDFs descargados no se versionan: el de prueba pesa 9,3 MB.
+*.pdf
+descargas/
+
+tmp/
+node_modules/
+.DS_Store

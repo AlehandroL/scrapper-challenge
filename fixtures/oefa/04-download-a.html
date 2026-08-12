@@ -1,0 +1,149 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head id="j_idt2"><link type="text/css" rel="stylesheet" href="/repdig/javax.faces.resource/theme.css.xhtml?ln=primefaces-omega" /><script type="text/javascript" src="/repdig/javax.faces.resource/jquery/jquery.js.xhtml?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript" src="/repdig/javax.faces.resource/jquery/jquery-plugins.js.xhtml?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript" src="/repdig/javax.faces.resource/core.js.xhtml?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><link type="text/css" rel="stylesheet" href="/repdig/javax.faces.resource/components.css.xhtml?ln=primefaces&amp;v=6.0&amp;v=6.0" /><script type="text/javascript" src="/repdig/javax.faces.resource/components.js.xhtml?ln=primefaces&amp;v=6.0&amp;v=6.0"></script><script type="text/javascript">if(window.PrimeFaces){PrimeFaces.settings.locale='es';}</script>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+		<title>Repositorio Digital OEFA</title>
+		<script language="JavaScript" type="text/JavaScript">
+			function exportar() {
+				return true;
+			}
+		</script>
+		<link rel="shortcut icon" href="/repdig/images/favicon.ico" type="image/x-icon" />
+		<link href="/repdig/styles/jquery.ui.custom.min.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/cssMenuTabla.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/cssConsultaExterna.css" rel="stylesheet" type="text/css" />
+		<link href="/repdig/styles/jquery.timeentry.css" rel="stylesheet" type="text/css" />
+
+		<script type="text/javascript" src="/repdig/scripts/jquery.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery-ui.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.dcmegamenu.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jsFuncionesComunes.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jsValidaInputs.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.plugin.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.timeentry.min.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.timeentry-es.js"></script>
+		<script type="text/javascript" src="/repdig/scripts/jquery.redirect.min.js"></script></head><body>
+		<!-- celeste oscuro raa 3184C6 -->
+
+		<div id="page">
+			<div id="header" style="border: 0px; border-style: solid; border-color: red; background-color: #FFFFFF">
+				<div class="left_header">
+					<img src="/repdig/images/logoOefa.png" height="55px" border="0" style="margin-top: 14px; margin-left: 10px;" alt="Organismo de Evaluación y Fiscalización Ambiental" />
+				</div>
+				<div class="center_header"></div>
+				<div style="width: 800px; position: absolute; top: 0px; left: 50%; margin-left: -400px; font-size: 20px; font-family: Verdana; color: #144AA7;">
+					<br /> <b>Repositorio Digital OEFA</b>
+				</div>
+				<div class="right_header"></div>
+				<div id="menu" style="border: 0px; border-style: solid; border-color: blue; box-shadow: 0 10px 10px -10px #000;">
+				</div>
+			</div>
+
+			<table class="menutabla">
+				<tr>
+					<td>
+						<a href="/repdig/consulta/consultaDfsai.xhtml">Resoluciones Directorales de la DFSAI</a>
+					</td>
+					<td>
+						<a href="/repdig/consulta/consultaTfa.xhtml">Resoluciones del Tribunal de Fiscalización Ambiental</a>
+					</td>
+				</tr>
+			</table>
+
+			<div id="main"><div id="j_idt10"></div><script id="j_idt10_s" type="text/javascript">$(function(){PrimeFaces.cw("AjaxStatus","widget_j_idt10",{id:"j_idt10",start:function(){PF('statusDialog').show()},success:function(){PF('statusDialog').hide()}});});</script><div id="j_idt11" class="ui-dialog ui-widget ui-widget-content ui-corner-all ui-shadow ui-hidden-container"><div class="ui-dialog-content ui-widget-content">
+					<img height="100" src="/repdig/images/ajaxLogout.gif" /></div></div><script id="j_idt11_s" type="text/javascript">$(function(){PrimeFaces.cw("Dialog","statusDialog",{id:"j_idt11",draggable:false,resizable:false,modal:true});});</script>
+				<table class="tablainferior">
+					<tr>
+						<td valign="top"><br /> <br /> <br /></td>
+						<td><body style="text-align: center;">
+<form id="listarDetalleInfraccionRAAForm" name="listarDetalleInfraccionRAAForm" method="post" action="/repdig/consulta/consultaTfa.xhtml" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="listarDetalleInfraccionRAAForm" value="listarDetalleInfraccionRAAForm" />
+
+				<div id="ContentMain">
+
+					<table class="titulocuadrado">
+						<tr>
+							<td>RESOLUCIONES DEL TRIBUNAL DE FISCALIZACIÓN AMBIENTAL</td>
+						</tr>
+					</table>
+					<br />
+					<table>
+						<tr>
+							<td valign="top"><fieldset class="fieldset-raa">
+
+									<table border="0" class="tablaFiltros" style="width: 100%">
+										<tr>
+											<td colspan="2"></td>
+										</tr>
+										<tr>
+											<th>Número de expediente </th>
+										</tr>
+										<tr>
+											<td><input id="listarDetalleInfraccionRAAForm:txtNroexp" type="text" name="listarDetalleInfraccionRAAForm:txtNroexp" value="" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Administrado </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt21" value="" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Unidad fiscalizable </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt25" value="" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<th>Sector </th>
+										</tr>
+										<tr>
+											<td><select id="listarDetalleInfraccionRAAForm:idsector" name="listarDetalleInfraccionRAAForm:idsector" class="cajaTexto" size="1" style="width:180px">	<option value="" selected="selected">--Todos--</option>
+	<option value="2">ELECTRICIDAD</option>
+	<option value="3">HIDROCARBUROS</option>
+	<option value="9">INDUSTRIA</option>
+	<option value="1">MINERIA</option>
+	<option value="8">PESQUERIA</option>
+</select></td>
+										</tr>
+										<tr>
+											<th>Nro. Resolución de Apelación </th>
+										</tr>
+										<tr>
+											<td><input type="text" name="listarDetalleInfraccionRAAForm:j_idt34" value="" class="cajaTexto" maxlength="100" size="30" /></td>
+										</tr>
+										<tr>
+											<td colspan="1" width="100%" align="center" style="text-align: center"><br /><button id="listarDetalleInfraccionRAAForm:btnBuscar" name="listarDetalleInfraccionRAAForm:btnBuscar" class="ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only btnControl_buscar" onclick="PrimeFaces.ab({s:&quot;listarDetalleInfraccionRAAForm:btnBuscar&quot;,u:&quot;listarDetalleInfraccionRAAForm:pgLista listarDetalleInfraccionRAAForm:txtNroexp&quot;});return false;" type="submit"><span class="ui-button-text ui-c">Buscar</span></button><script id="listarDetalleInfraccionRAAForm:btnBuscar_s" type="text/javascript">PrimeFaces.cw("CommandButton","widget_listarDetalleInfraccionRAAForm_btnBuscar",{id:"listarDetalleInfraccionRAAForm:btnBuscar"});</script></td>
+										</tr>
+									</table>
+
+								</fieldset></td>
+							<td valign="top"><span id="listarDetalleInfraccionRAAForm:pgLista"><div id="listarDetalleInfraccionRAAForm:dt" class="ui-datatable ui-widget ui-datatable-scrollable" style="margin-bottom:20px;width:100%;"><div class="ui-widget-header ui-datatable-scrollable-header"><div class="ui-datatable-scrollable-header-box"><table role="grid" class="grillaFlat"><thead id="listarDetalleInfraccionRAAForm:dt_head"><tr role="row"><th id="listarDetalleInfraccionRAAForm:dt:j_idt41" class="ui-state-default" role="columnheader" aria-label="Nro." style="text-align:center;vertical-align:top;;width:5%"><span class="ui-column-title"><span class="cabeceraGrilla">Nro.</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt44" class="ui-state-default" role="columnheader" aria-label="Número de expediente" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Número de expediente</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt47" class="ui-state-default" role="columnheader" aria-label="Administrado" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Administrado</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt50" class="ui-state-default" role="columnheader" aria-label="Unidad fiscalizable" style="text-align: justify;vertical-align:top;;width:20%"><span class="ui-column-title"><span class="cabeceraGrilla">Unidad fiscalizable</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt53" class="ui-state-default" role="columnheader" aria-label="Sector" style="text-align: justify;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Sector</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt56" class="ui-state-default" role="columnheader" aria-label="Nro. Resolución de Apelación" style="text-align:left;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Nro. Resolución de Apelación</span></span></th><th id="listarDetalleInfraccionRAAForm:dt:j_idt60" class="ui-state-default" role="columnheader" aria-label="Archivo" style="text-align: center;vertical-align:top;;width:15%"><span class="ui-column-title"><span class="cabeceraGrilla">Archivo</span></span></th></tr></thead></table></div></div><div class="ui-datatable-scrollable-body" tabindex="-1"><table role="grid" class="grillaFlat"><tbody id="listarDetalleInfraccionRAAForm:dt_data" class="ui-datatable-data ui-widget-content"><tr data-ri="10" class="ui-widget-content ui-datatable-even" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 11</td><td role="gridcell" style="text-align: justify;vertical-align:top;">657-2011-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Instituto Tecnológico de la Producción</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de procesamiento de recursos hidrobiológicos para consumo humano directo (Planta de congelado)</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">236-2013-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;">
+<script type="text/javascript" src="/repdig/javax.faces.resource/jsf.js.xhtml?ln=javax.faces"></script>
+<a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:10:j_idt63':'listarDetalleInfraccionRAAForm:dt:10:j_idt63','param_uuid':'746821e4-f99f-4e5c-90e2-7e2e2e3731d8'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="11" class="ui-widget-content ui-datatable-odd" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 12</td><td role="gridcell" style="text-align: justify;vertical-align:top;">655-2011-PRODUCE/DIGSECOVI</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Natural Protein Technologies S.A.C. </td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de Harina</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">231-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:11:j_idt63':'listarDetalleInfraccionRAAForm:dt:11:j_idt63','param_uuid':'62d415af-6462-4b14-9cab-a95717cc91f9'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="12" class="ui-widget-content ui-datatable-even" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 13</td><td role="gridcell" style="text-align: justify;vertical-align:top;">653-2011-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Centro Mar S.A.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de Congelado de Productos Hidrobiológicos</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">232-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:12:j_idt63':'listarDetalleInfraccionRAAForm:dt:12:j_idt63','param_uuid':'e8a4a307-799a-4ad5-aa15-620d1d1ff2cf'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="13" class="ui-widget-content ui-datatable-odd" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 14</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5935-07-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Corporación Pesquera Inca S.A.C.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de Congelado</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">287-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:13:j_idt63':'listarDetalleInfraccionRAAForm:dt:13:j_idt63','param_uuid':'48080ef9-d437-4286-a831-22c0f097aede'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="14" class="ui-widget-content ui-datatable-even" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 15</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5545-07-PRODUCE/DIGSECOVI-DSVS</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Distribuidores, Exportadores, Importadores S.R.L. </td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de Harina Residual </td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">001-2013-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:14:j_idt63':'listarDetalleInfraccionRAAForm:dt:14:j_idt63','param_uuid':'a00ee040-a3db-4596-a5bf-e235e04f44c1'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="15" class="ui-widget-content ui-datatable-odd" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 16</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5446-07 -PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquera Hayduk S.A.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">EIP Ilo 
+Planta Cata - Cata</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">267-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:15:j_idt63':'listarDetalleInfraccionRAAForm:dt:15:j_idt63','param_uuid':'c89039df-c6ef-4da3-808b-0802f736a2b6'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="16" class="ui-widget-content ui-datatable-even" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 17</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5445-2007-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Génesis E.I.R.L.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">EIP Génesis</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">262-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:16:j_idt63':'listarDetalleInfraccionRAAForm:dt:16:j_idt63','param_uuid':'21adf96d-7116-4551-b0ef-dde76e9e14a7'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="17" class="ui-widget-content ui-datatable-odd" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 18</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5350-2008-PRODUCE-DGSCV-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Corporación Pesquera Inca S.A.C.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de procesamiento de recursos hidrobiológicos para consumo humano indirecto (Planta de Harina de Pescado)</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">113-2012-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:17:j_idt63':'listarDetalleInfraccionRAAForm:dt:17:j_idt63','param_uuid':'9ee8d494-9f91-46cf-93db-422d3b610289'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="18" class="ui-widget-content ui-datatable-even" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 19</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5349-2008-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Cridani S.A.C.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Planta de procesamiento de recursos hidrobiológicos para consumo humano indirecto (</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">130-2013-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:18:j_idt63':'listarDetalleInfraccionRAAForm:dt:18:j_idt63','param_uuid':'0f92b7f5-0c8f-4981-816f-88691a0a59bf'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr><tr data-ri="19" class="ui-widget-content ui-datatable-odd" role="row"><td role="gridcell" style="text-align:center;vertical-align:top;"> 20</td><td role="gridcell" style="text-align: justify;vertical-align:top;">5346-2008-PRODUCE/DIGSECOVI-Dsvs</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Sea Protein S.A.</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Concesión de acuicultura</td><td role="gridcell" style="text-align: justify;vertical-align:top;">Pesquería</td><td role="gridcell" style="text-align:left;">025-2013-OEFA/TFA</td><td role="gridcell" style="text-align: center;vertical-align:top;"><a href="#" title="" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:19:j_idt63':'listarDetalleInfraccionRAAForm:dt:19:j_idt63','param_uuid':'9b40c4fe-c8e9-4bd2-907a-0f7e9e6d0ece'},'');return false"><img src="../images/pdf_descarga.png" style="border:0;width:25px" /></a></td></tr></tbody></table></div><div class="ui-widget-header ui-datatable-scrollable-footer"><div class="ui-datatable-scrollable-footer-box"><table role="grid" class="grillaFlat"></table></div></div><div id="listarDetalleInfraccionRAAForm:dt_paginator_bottom" class="ui-paginator ui-paginator-bottom ui-widget-header ui-corner-bottom" role="navigation" aria-label="Pagination"><span class="ui-paginator-current">Página 2 de 176 (1753 registros)</span><a href="#" class="ui-paginator-first ui-state-default ui-corner-all" aria-label="First Page" tabindex="0"><span class="ui-icon ui-icon-seek-first">p</span></a><a href="#" class="ui-paginator-prev ui-state-default ui-corner-all" aria-label="Previous Page" tabindex="0"><span class="ui-icon ui-icon-seek-prev">p</span></a><span class="ui-paginator-pages"><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">1</a><a class="ui-paginator-page ui-state-default ui-state-active ui-corner-all" tabindex="0" href="#">2</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">3</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">4</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">5</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">6</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">7</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">8</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">9</a><a class="ui-paginator-page ui-state-default ui-corner-all" tabindex="0" href="#">10</a></span><a href="#" class="ui-paginator-next ui-state-default ui-corner-all" aria-label="Next Page" tabindex="0"><span class="ui-icon ui-icon-seek-next">p</span></a><a href="#" class="ui-paginator-last ui-state-default ui-corner-all" aria-label="Last Page" tabindex="0"><span class="ui-icon ui-icon-seek-end">p</span></a>
+											<div style="float: right"><a href="#" onclick="mojarra.jsfcljs(document.getElementById('listarDetalleInfraccionRAAForm'),{'listarDetalleInfraccionRAAForm:dt:j_idt38':'listarDetalleInfraccionRAAForm:dt:j_idt38'},'');return false">
+													<img alt="Exportar a excel" title="Exportar a excel" height="24" border="0" src="/repdig/images/iconoexcel.png" /></a>
+											</div></div><input type="hidden" id="listarDetalleInfraccionRAAForm:dt_scrollState" name="listarDetalleInfraccionRAAForm:dt_scrollState" autocomplete="off" value="0,0" /></div><script id="listarDetalleInfraccionRAAForm:dt_s" type="text/javascript">$(function(){PrimeFaces.cw("DataTable","widget_listarDetalleInfraccionRAAForm_dt",{id:"listarDetalleInfraccionRAAForm:dt",paginator:{id:['listarDetalleInfraccionRAAForm:dt_paginator_bottom'],rows:10,rowCount:1753,page:1,currentPageTemplate:'Página {currentPage} de {totalPages} ({totalRecords} registros)'},scrollable:true,liveScroll:false,scrollStep:0,scrollLimit:1753,liveScrollBuffer:0});});</script></span></td>
+						</tr>
+					</table>
+
+				</div><input type="hidden" name="javax.faces.ViewState" id="j_id1:javax.faces.ViewState:0" value="pfIyjU1Z//iysp+EZgPQB0oiQDotFfW8xxWNzE1iQob349CQzfrIBUuy5ZJbPRLKjN7ZycMSWUy98nRVCIKaQ9pt/mwYWhumzBrpTI9nr5LMVW1x0BZUIs8zQIB4peDttP36WZGNKv1VhpVH1u0DbajgWL1tQzUzWoo0S6H/xurq6fWxaxLlC3LBSkq0D4yeC04y0SZG3QBK0PjgrMjK6bIKxUBXI0SwJKILPrJXi+zBFvacCvkLYAMlBuyGrMcpm5Guk5YQU5j7ygPs6gFdUFAysq2eQZiHO63tRoB4xC3BedU2zNIK3vZaPo3p4HFbdhpdhBJHNpHUZMYhzhFRPSftcOIj5alr6krP11uR4W0cqssu1SpM/GoJwqFahhU9cdMjcy23Rxpqn7NErbzcdxVrhOnPErZnul79GngfZPMKEeDGlprsed1o5Y1Si7a3c57FTzAeihFFAiEo4u/JGZ8ZGi4FaDPJxpft8LCm55isQMASeRYnJ8kmmB4MFwPgQgkGxbD7jz1ISXVdnGRkMQWk9OMNQCM2ZUuMsVI43hIDbFKz/XvTPUgfTVbkdje4byuHGjKnYhNySh4CsWKmSM3zTtSFaGNyu1DS62WnLLlcjckn4BxHREk9no+KSKxN41E9prNr+uzsS+Nj/x6cG8N8UMeqMkMWjReN7BX6+1IR1o0q2mVFjwVht8qdZBybDJZnFlrIoQmX/ZEAB8e8b7xkjSKCifx86XnreVY2xRtQu0plblzQ61cZsv5HFL6p54uqtQWZrf6DhrMdmwN5eIbvUcieFVfFjRYiydYHNStblRB3SbRLqhpNcSuqyxveMDRZ4riXp8kTIS2m5TWLzEsxwaMLOTtHdJhwDRJsCB9iIjq5ni44P/F3tzERBuzVwLT5ieZ3LE75LMnNWBA5CyVK3iVp/qDb/ASv+FJn/ZuKYjHj4khFqvzMytOc3m+ylMWJQBatip29yFWEIJQl3iOM13ev3tNGfn18qkOPNrSYWxotzlnBAIcJmELczvA9pPZry/ptoYuD64wbOjau6Tb9IhIawu/ZQ2HCSzORoVuXeNnoWIwjAi/ZChsSVgxZ8DP3Lnh25jfTnPDUJBysJ5B/zVczWnQqqnVkBzTLIXwgaiO0ht8s6y31v426bXYEv4LcQMy4YeOp+T3t/3Lm8dX9k/5tOhZCqIg+YKADE2tpJOhJlv2WjiqVcorJsxbCJsKLba5dSB1jAnL9D5+M1p7BJ6ExFaRefnjGyWzQHBB8l58J806ALlXwKfN+xns2qR3MAO9ajMzZGOv9Ez9LnU7P6FL0ewi419NDSJ0H1nrhLxksXoBW8qGGh0/LWvB/56uRYtnhpqry4ydNc2EMgKmC/Kh38289KT/QLZ/zZYbDc+j1TOeXEpk2OhF448T76YRicwJnSOVkB4F6x4F0HSp9o/Slqv/UGH/eYYDn8lf83U+Hd5X7z4zqsMWlojOTNaHNVt6ydpTv4UzQvYqcZ3CiLLlpqngNwwlY1FdH1M4iRLhq7qshUmEARte1d1gcCUbYO986zHRe7+zYtc77Pb+SP5KjtZErlup3ov2VN3+RhlXvjDFZFW0zLlZ7adPm1SuZUhWVziE2r997GwFJlHoXRgIhe84PvgdS0BZiFfpBwNk8dtZfkuNIgGXu6sa1aUSNrYPOnniUvELpeJnDGA==" autocomplete="off" />
+</form></body></td>
+					</tr>
+				</table>
+
+			</div>
+			<div id="footer">
+				<table width="100%" cellpadding="0" cellspacing="0">
+					<tr>
+						<td height="31" align="center" valign="middle" style="font-family: arial; font-size: 10px; color: #FFF; font-weight: bold">
+							Organismo de Evaluación y Fiscalización Ambiental - OEFA, Lima -
+							Perú<br /> Oficina de Tecnologías de la Información (OTI) |
+							Copyright © - 2017 Todos los derechos reservados<br />
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+		<div id="divMsgMain" style="display: none"></div></body>
+</html>
