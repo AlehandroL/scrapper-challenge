@@ -53,5 +53,48 @@ capa de protocolo debe ser reutilizable para el próximo portal legacy.
 
 ## Estado
 
-Trabajo en curso, organizado en bloques. El bloque 1 —reversing del protocolo
-contra OEFA— está en revisión.
+Trabajo en curso, organizado en bloques.
+
+### Bloque 1 — Reversing del protocolo ✅
+
+Los tres requests que definen el protocolo están replicados **sin navegador** y
+guardados como fixtures en [`fixtures/oefa/`](fixtures/oefa/):
+
+```bash
+bash scripts/capture-oefa.sh     # regenera los fixtures contra el sitio vivo
+bash scripts/check-access.sh     # diagnóstico de acceso al Poder Judicial
+```
+
+Stack verificado: Mojarra (JSF 2.x, prefijo `javax.faces.*`) + PrimeFaces 6.0,
+sobre un dataset de 1.753 registros en 176 páginas.
+
+**Hallazgo con consecuencias de arquitectura:** la descarga de un PDF exige un
+`ViewState` alineado con la página donde vive la fila. Verificado con un
+experimento controlado —misma sesión, misma fila, mismo conjunto de campos—
+variando solo el origen del token: con el de la página 2 el servidor devuelve
+`200` y la página re-renderizada; con el de la página 1, el PDF. Esto descarta el
+pipeline desacoplado «recolectar todo el metadata primero, descargar después».
+
+Otros dos puntos que cuestan tiempo si se descubren tarde:
+
+- El `ViewState` vuelve en el `partial-response` con id
+  `j_id1:javax.faces.ViewState:0`, no `javax.faces.ViewState`. Buscarlo por id
+  exacto devuelve `undefined` contra toda respuesta real, y el síntoma se
+  confunde con un bloqueo del sitio.
+- Sin la cookie `JSESSIONID` la búsqueda funciona igual, pero la paginación
+  devuelve `200` con la tabla vacía. No hay excepción: parece que el selector
+  dejó de matchear.
+
+El detalle completo, incluidos los modos de falla y lo que los fixtures
+demuestran, está en [`fixtures/oefa/README.md`](fixtures/oefa/README.md).
+
+**Limitación conocida:** el reversing se hizo con el formulario vacío. Los cuatro
+filtros del portal se reenvían vacíos porque JSF exige el submit completo del
+form, pero la búsqueda con valores no está reversada y **el adapter no soporta
+filtros**. La interfaz de fuente se expondrá sin parámetros de filtrado en vez de
+aceptarlos y descartarlos en silencio.
+
+### Bloques 2–8
+
+Pendientes: cliente HTTP, capa JSF, adapters, descarga de PDFs con DLQ y
+checkpointing, sanity checks y documentación.
