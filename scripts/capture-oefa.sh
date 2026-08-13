@@ -31,7 +31,7 @@ set -euo pipefail
 
 BASE_URL="https://publico.oefa.gob.pe/repdig/consulta/consultaTfa.xhtml"
 UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-DELAY="${CAPTURE_DELAY:-3}"    # segundos entre requests; política conservadora (§5.6)
+DELAY="${CAPTURE_DELAY:-3}"    # segundos entre requests; política conservadora
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/fixtures/oefa"

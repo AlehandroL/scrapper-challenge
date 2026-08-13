@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# check-access.sh — Cierra el diagnóstico de acceso de §2.3.
+# check-access.sh — Cierra el diagnóstico de acceso al portal del Poder Judicial.
 #
-# El portal del Poder Judicial responde 403 desde Chile. El diagnóstico de §2.2
+# El portal del Poder Judicial responde 403 desde Chile. Un diagnóstico por capas
 # descartó fingerprinting TLS/JA3 con curl-impersonate y dejó una única hipótesis
 # viva: el discriminante es un atributo de la IP de origen (país, ASN o
 # reputación). Separar esas tres hipótesis exige correr esta misma prueba desde
@@ -10,7 +10,7 @@
 #
 # NO SE EJECUTARON esas pruebas en la entrega: requieren un hotspot móvil de otro
 # ASN, una IP de datacenter estadounidense y una VPN con salida en Lima. Contratar
-# esa infraestructura quedó fuera del alcance (ver §2.3 del documento). El script
+# esa infraestructura quedó fuera del alcance de esta entrega. El script
 # existe para que cualquiera con esas salidas de red cierre el diagnóstico en un
 # comando — en particular quien evalúe esta entrega desde Perú.
 #
@@ -71,7 +71,7 @@ case "$PJ_CODE" in
 esac
 
 {
-  echo "Diagnóstico de acceso — §2.3"
+  echo "Diagnóstico de acceso — jurisprudencia.pj.gob.pe"
   echo "============================================================"
   echo "Fecha (UTC) : $(date -u +'%Y-%m-%d %H:%M:%S')"
   echo "IP origen   : ${IP}"
@@ -106,7 +106,7 @@ esac
   echo "  403, la restricción es una regla de la aplicación de jurisprudencia y"
   echo "  no una política del PoP ni un bloqueo de red contra el país."
   echo
-  echo "  Ya descartado en §2.2, no hace falta volver a probarlo: headers de"
+  echo "  Ya descartado, no hace falta volver a probarlo: headers completos de"
   echo "  Chrome, HTTP/1.1 vs HTTP/2, UA de Googlebot y la huella TLS/JA3 real de"
   echo "  Chrome vía curl-impersonate. Los cuatro dan 403. El discriminante no es"
   echo "  cómo se conecta el cliente sino desde dónde."

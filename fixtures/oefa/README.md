@@ -10,6 +10,22 @@ archivos.
 - **Regenerar:** `bash scripts/capture-oefa.sh`
 - **Stack:** Mojarra (JSF 2.x, prefijo `javax.faces.*`) + PrimeFaces 6.0
 
+> **Alcance: búsqueda sin filtros.** Los fixtures se capturaron con el formulario
+> vacío, que devuelve el dataset completo (1.753 registros). El portal expone
+> cuatro filtros —`txtNroexp`, el `select` `idsector` y tres campos de texto con
+> ids autogenerados (`j_idt21`, `j_idt25`, `j_idt34`)— que se reenvían vacíos en
+> cada POST porque JSF exige el submit completo del form, pero **el request de
+> búsqueda con valores no está reversado y el adapter no soporta filtros.**
+>
+> La interfaz de fuente se expone sin parámetros de filtrado en vez de aceptarlos
+> y descartarlos en silencio. Recorrer el dataset completo y filtrar del lado del
+> cliente cubre el caso de uso sin esa deuda.
+>
+> Para agregarlos: capturar un POST de búsqueda con valores, comparar contra
+> `02-search-partial.xml` y verificar que `rowCount` baja de forma consistente.
+> El punto a confirmar es si el filtro reinicia la paginación en el servidor; si
+> no lo hace, el offset queda desalineado y se leen filas del resultado anterior.
+
 Los `jsessionid` reescritos en las URLs están reemplazados por
 `SESSION_ID_REDACTED`. El token `javax.faces.ViewState` sí se conserva íntegro:
 es el objeto de estudio y no identifica a nadie.
