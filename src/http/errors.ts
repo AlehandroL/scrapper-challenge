@@ -31,6 +31,22 @@ export abstract class TransportError extends Error {
    */
   abstract readonly retryable: boolean;
 
+  /**
+   * Si este error es evidencia de que **el servidor** está degradado. Es lo que
+   * alimenta al circuit breaker.
+   *
+   * Es `abstract` y no un valor por defecto, a propósito: obliga a que toda
+   * clase nueva declare su postura. La alternativa —que cada rama de
+   * `session.ts` se acordara de avisarle al breaker— ya falló una vez: el camino
+   * del `UnexpectedStatusError` no avisaba, y una sonda de `half-open` que
+   * terminaba en 404 dejaba el circuito trabado **para siempre**, para todas las
+   * sesiones. Con el miembro abstracto ese olvido no compila.
+   *
+   * `false` no significa «salió bien»: significa «esto no dice nada malo sobre
+   * la salud del servidor».
+   */
+  abstract readonly degradaServidor: boolean;
+
   readonly method: string;
   readonly url: string;
 
@@ -54,6 +70,7 @@ export abstract class TransportError extends Error {
 export class ThrottledError extends TransportError {
   readonly kind = 'throttled';
   readonly retryable = true;
+  readonly degradaServidor = true;
   readonly status: number;
 
   /** Milisegundos pedidos por `Retry-After`, si vino y era parseable. */
@@ -80,6 +97,9 @@ export class ThrottledError extends TransportError {
 export class AccessDeniedError extends TransportError {
   readonly kind = 'access-denied';
   readonly retryable = false;
+  /** Se reporta como degradación aunque no se reintente: si una sesión recibe
+   *  403, las demás deberían frenar también en vez de seguir golpeando. */
+  readonly degradaServidor = true;
   readonly status = 403;
 
   constructor(ctx: ErrorContext) {
@@ -95,6 +115,7 @@ export class AccessDeniedError extends TransportError {
 export class ServerUnavailableError extends TransportError {
   readonly kind = 'server-unavailable';
   readonly retryable = true;
+  readonly degradaServidor = true;
   readonly status: number;
 
   constructor(ctx: ErrorContext, status: number) {
@@ -107,6 +128,10 @@ export class ServerUnavailableError extends TransportError {
 export class UnexpectedStatusError extends TransportError {
   readonly kind = 'unexpected-status';
   readonly retryable = false;
+  /** Un 404 o un 400 son respuestas HTTP legítimas: prueba de que el servidor
+   *  está vivo, no de que esté degradado. Abrir el circuito por esto sería
+   *  castigar al servidor por un error nuestro. */
+  readonly degradaServidor = false;
   readonly status: number;
 
   constructor(ctx: ErrorContext, status: number) {
@@ -143,6 +168,9 @@ const CODIGOS_TRANSITORIOS: ReadonlySet<string> = new Set([
 export class NetworkError extends TransportError {
   readonly kind = 'network';
   readonly retryable: boolean;
+  /** Vale incluso con un código desconocido: si el socket falló, algo entre
+   *  nosotros y el servidor no está sano. */
+  readonly degradaServidor = true;
   readonly code: string | undefined;
 
   constructor(ctx: ErrorContext, code: string | undefined, detalle: string) {
@@ -162,6 +190,9 @@ export class NetworkError extends TransportError {
 export class CircuitOpenError extends TransportError {
   readonly kind = 'circuit-open';
   readonly retryable = true;
+  /** Lo lanza el propio breaker **antes** de que salga el request, así que
+   *  nunca se le reporta de vuelta. Declararlo igual es lo que pide el tipo. */
+  readonly degradaServidor = false;
   readonly retryAfterMs: number;
 
   constructor(ctx: ErrorContext, retryAfterMs: number) {

@@ -1,5 +1,7 @@
 # Desafío de scraping — Jurisprudencia Nacional Sistematizada
 
+[![CI](https://github.com/AlehandroL/scrapper-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/AlehandroL/scrapper-challenge/actions/workflows/ci.yml)
+
 Scraper en TypeScript, **sin automatización de navegador**, para el portal de
 Jurisprudencia Nacional Sistematizada del Poder Judicial del Perú.
 
@@ -122,7 +124,7 @@ la tasa y el breaker protegen al servidor, que es uno solo. N sesiones
 concurrentes se comportan como N navegadores distintos contra un único servidor
 al que entre todas no deben pasarle por encima.
 
-Tres decisiones que cuestan tiempo si se descubren tarde:
+Cuatro decisiones que cuestan tiempo si se descubren tarde:
 
 - **El `acquire()` del limiter va dentro de la función que se reintenta.** Si
   estuviera afuera, los reintentos saltarían el throttling justo cuando el
@@ -134,6 +136,13 @@ Tres decisiones que cuestan tiempo si se descubren tarde:
 - **Con `responseType: 'stream'` un 429 también trae cuerpo.** Si no se destruye,
   el socket queda colgado; unos pocos reintentos agotan el pool y los requests se
   cuelgan sin timeout, con un síntoma que no se parece en nada a la causa.
+- **Todo camino de error tiene que avisarle al circuit breaker, sin excepción.**
+  El del `UnexpectedStatusError` no lo hacía. Un 404 que cayera justo sobre la
+  sonda del `half-open` dejaba la sonda «en vuelo» para siempre: el circuito
+  rechazaba todo request posterior —de todas las sesiones, porque el breaker es
+  global— y ningún cooldown lo curaba. La política vive ahora en el tipo
+  (`degradaServidor`, abstracto en `TransportError`) y el reporte en un único
+  punto de salida: olvidarse dejó de compilar.
 
 El smoke contra OEFA queda **fuera de `npm test`** a propósito: la suite no debe
 depender de la red ni golpear el sitio en cada corrida. Comprueba tres cosas y
@@ -178,7 +187,7 @@ submit no-ajax estilo `mojarra.jsfcljs`, y el `ViewState` rotando con un único
 token vigente por sesión.
 
 ```bash
-npm test              # 142 tests, sin red
+npm test              # 149 tests, sin red
 npm run smoke:jsf     # opt-in: bootstrap → búsqueda → página 2 contra OEFA
 ```
 

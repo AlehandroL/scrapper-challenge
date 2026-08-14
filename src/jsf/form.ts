@@ -22,8 +22,20 @@ export interface JsfForm {
   readonly id: string;
   /** Resuelto contra la URL de la página y **sin** el parámetro de path `;jsessionid=`. */
   readonly action: string;
-  /** Campos submitables en orden de aparición. **No** incluye el `ViewState`. */
-  readonly campos: ReadonlyMap<string, string>;
+  /**
+   * Campos submitables, agrupados por nombre. **No** incluye el `ViewState`.
+   *
+   * El valor es una lista y no un string porque un `selectManyCheckbox` o un
+   * `<select multiple>` mandan el mismo nombre varias veces; colapsarlos al
+   * último pierde datos en silencio. Hoy el form de OEFA es todo monovaluado,
+   * pero los filtros no tienen por qué serlo, y el tipo se cambia **antes** de
+   * que `sources/` dependa de él y no después.
+   *
+   * El orden es el de primera aparición del nombre, no el orden DOM exacto. Del
+   * otro lado no se observa: un servlet agrupa por nombre igual
+   * (`getParameterValues()`).
+   */
+  readonly campos: ReadonlyMap<string, readonly string[]>;
   readonly viewState: string | undefined;
 }
 
@@ -77,8 +89,14 @@ export function parseForm(html: string, pageUrl: string, formId?: string): JsfFo
 
   const action = stripJsessionid(new URL(form.attr('action') ?? pageUrl, pageUrl).toString());
 
-  const campos = new Map<string, string>();
+  const campos = new Map<string, string[]>();
   let viewState: string | undefined;
+
+  const agregar = (nombre: string, valor: string): void => {
+    const valores = campos.get(nombre);
+    if (valores === undefined) campos.set(nombre, [valor]);
+    else valores.push(valor);
+  };
 
   form.find('input, select, textarea').each((_, el) => {
     const $el = $(el);
@@ -96,14 +114,24 @@ export function parseForm(html: string, pageUrl: string, formId?: string): JsfFo
     const etiqueta = (el as { tagName?: string }).tagName?.toLowerCase();
 
     if (etiqueta === 'textarea') {
-      campos.set(nombre, $el.text());
+      agregar(nombre, $el.text());
       return;
     }
 
     if (etiqueta === 'select') {
-      const seleccionada = $el.find('option[selected]').first();
-      const opcion = seleccionada.length > 0 ? seleccionada : $el.find('option').first();
-      campos.set(nombre, opcion.attr('value') ?? opcion.text() ?? '');
+      const seleccionadas = $el.find('option[selected]');
+
+      if ($el.attr('multiple') !== undefined) {
+        // Un `<select multiple>` manda una entrada por opción marcada — y
+        // ninguna si no hay ninguna, que no es lo mismo que mandar la primera.
+        seleccionadas.each((_, op) => agregar(nombre, $(op).attr('value') ?? $(op).text()));
+        return;
+      }
+
+      // Sin `multiple`, el navegador manda la seleccionada; o la primera, si
+      // ninguna lo está.
+      const opcion = seleccionadas.length > 0 ? seleccionadas.first() : $el.find('option').first();
+      agregar(nombre, opcion.attr('value') ?? opcion.text() ?? '');
       return;
     }
 
@@ -111,7 +139,7 @@ export function parseForm(html: string, pageUrl: string, formId?: string): JsfFo
     if (TIPOS_NO_SUBMITABLES.has(tipo)) return;
     if ((tipo === 'checkbox' || tipo === 'radio') && $el.attr('checked') === undefined) return;
 
-    campos.set(nombre, $el.attr('value') ?? '');
+    agregar(nombre, $el.attr('value') ?? '');
   });
 
   return { id, action, campos, viewState };
@@ -119,11 +147,13 @@ export function parseForm(html: string, pageUrl: string, formId?: string): JsfFo
 
 /** Copia los campos base y agrega los extra, sin mutar el form. */
 export function toSearchParams(
-  campos: ReadonlyMap<string, string>,
+  campos: ReadonlyMap<string, readonly string[]>,
   extra?: Readonly<Record<string, string>>,
 ): URLSearchParams {
   const params = new URLSearchParams();
-  for (const [clave, valor] of campos) params.append(clave, valor);
+  for (const [clave, valores] of campos) for (const valor of valores) params.append(clave, valor);
+  // `set` y no `append`: los extra son parámetros de protocolo y pisan lo que
+  // hubiera con ese nombre, incluido un campo multivalor entero.
   if (extra !== undefined) for (const [clave, valor] of Object.entries(extra)) params.set(clave, valor);
   return params;
 }

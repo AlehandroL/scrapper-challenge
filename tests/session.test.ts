@@ -204,6 +204,48 @@ describe('Session', () => {
     expect(server.hits['/unavailable']).toBe(2);
   });
 
+  /**
+   * La regresión del latch.
+   *
+   * El camino del `UnexpectedStatusError` era el único de `clasificar()` que no
+   * le avisaba al breaker. Cuando ese 404 caía justo sobre la sonda de un
+   * `half-open`, la sonda quedaba «en vuelo» para siempre: `assertClosed()`
+   * rechazaba todo request posterior —de **todas** las sesiones, porque el
+   * breaker es global— y ningún cooldown lo salvaba. Verificado en su momento
+   * con un millón de ms de reloj virtual: seguía trabado.
+   */
+  it('un 404 durante la sonda del half-open no traba el circuito', async () => {
+    let ahora = 0;
+    const breaker = new CircuitBreaker({ minSamples: 2, threshold: 1, cooldownMs: 60_000 }, () => ahora);
+    const d = deps({ breaker });
+    const s = createSession(d);
+
+    await s.get(`${server.url}/unavailable`).catch(() => {});
+    expect(breaker.state).toBe('open');
+
+    // Cumplido el cooldown pasa exactamente una sonda, y le toca un 404.
+    ahora = 60_001;
+    await expect(s.get(`${server.url}/no-existe`)).rejects.toBeInstanceOf(UnexpectedStatusError);
+
+    // El servidor contestó: está vivo. La sonda se libera y el circuito cierra.
+    expect(breaker.state).toBe('closed');
+    expect((await s.get(`${server.url}/ok`)).data).toBe('ok');
+  });
+
+  it('una racha de 404 no abre el circuito: el servidor está contestando', async () => {
+    const d = deps({ breaker: new CircuitBreaker({ minSamples: 2, threshold: 0.5 }) });
+    const s = createSession(d);
+
+    for (let i = 0; i < 5; i++) {
+      await expect(s.get(`${server.url}/no-existe`)).rejects.toBeInstanceOf(UnexpectedStatusError);
+    }
+
+    // Un 404 es una respuesta HTTP legítima, no una señal de degradación. Cortar
+    // la corrida por esto sería castigar al servidor por un error nuestro.
+    expect(d.breaker.state).toBe('closed');
+    expect(d.metrics.fallidos).toBe(5);
+  });
+
   it('postForm envía urlencoded en UTF-8', async () => {
     const s = createSession(deps());
 

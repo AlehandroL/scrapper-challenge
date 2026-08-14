@@ -32,6 +32,7 @@ import {
   ThrottledError,
   UnexpectedStatusError,
   type ErrorContext,
+  type TransportError,
 } from './errors.ts';
 import type { RateLimiter } from './rate-limiter.ts';
 import { RETRY_DEFAULTS, parseRetryAfter, withRetry, type RetryHooks, type RetryOptions } from './retry.ts';
@@ -138,8 +139,7 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
           res = await instance.request<T>({ ...cfg, validateStatus: () => true });
         } catch (error) {
           deps.metrics.fallidos += 1;
-          deps.breaker.recordDegraded();
-          const err = aNetworkError(error, ctx);
+          const err = reportar(aNetworkError(error, ctx), deps);
           log.warn({ url: redactUrl(ctx.url), code: err.code, attempt }, 'fallo de red');
           throw err;
         }
@@ -199,7 +199,7 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
 /**
  * Traduce el código HTTP a la taxonomía de `errors.ts` (§5.6).
  *
- * Cada rama que no es 2xx destruye el cuerpo antes de lanzar: con
+ * Todo lo que no es 2xx destruye el cuerpo antes de lanzar: con
  * `responseType: 'stream'` un 429 **también** trae stream, y si no se drena el
  * socket queda colgado. Unos pocos reintentos así agotan el pool de conexiones y
  * el síntoma —requests que se cuelgan sin timeout— no se parece en nada a la
@@ -222,37 +222,65 @@ function clasificar<T>(
   }
 
   descartarCuerpo(res.data);
+  throw reportar(construirError(res, ctx, deps, log), deps);
+}
+
+/**
+ * Elige la clase de error y actualiza métricas, limiter y logs.
+ *
+ * **No toca el breaker**: de eso se encarga `reportar()`, y que sea el único que
+ * lo haga es justamente el punto.
+ */
+function construirError<T>(
+  res: AxiosResponse<T>,
+  ctx: ErrorContext,
+  deps: SessionDeps,
+  log: Logger,
+): TransportError {
+  const { status } = res;
 
   if (status === 429) {
     deps.metrics.throttled += 1;
     // El orden importa: bajar la tasa antes de lanzar hace que el reintento —que
     // vuelve a pedir token— ya sienta la tasa nueva.
     deps.limiter.onThrottled();
-    deps.breaker.recordDegraded();
     const retryAfterMs = parseRetryAfter(cabecera(res, 'retry-after'));
     log.warn(
       { url: redactUrl(ctx.url), retryAfterMs, rps: Number(deps.limiter.rps.toFixed(2)) },
       '429 — bajando la tasa',
     );
-    throw new ThrottledError(ctx, status, retryAfterMs);
+    return new ThrottledError(ctx, status, retryAfterMs);
   }
 
   deps.metrics.fallidos += 1;
 
   if (status === 403) {
-    // Se registra como degradación aunque no se reintente: si una sesión recibe
-    // 403, las demás deberían frenar también en vez de seguir golpeando.
-    deps.breaker.recordDegraded();
     log.error({ url: redactUrl(ctx.url) }, '403 — posible bloqueo; la corrida se detiene');
-    throw new AccessDeniedError(ctx);
+    return new AccessDeniedError(ctx);
   }
 
-  if (status >= 500) {
-    deps.breaker.recordDegraded();
-    throw new ServerUnavailableError(ctx, status);
-  }
+  if (status >= 500) return new ServerUnavailableError(ctx, status);
 
-  throw new UnexpectedStatusError(ctx, status);
+  return new UnexpectedStatusError(ctx, status);
+}
+
+/**
+ * El **único** punto por el que un error sale de esta capa, y por eso el breaker
+ * siempre se entera.
+ *
+ * Antes cada rama avisaba por su cuenta y una se olvidó: la del
+ * `UnexpectedStatusError`. Cuando ese 404 caía justo sobre la sonda de un
+ * `half-open`, la sonda quedaba «en vuelo» para siempre y el circuito rechazaba
+ * todo request posterior —de todas las sesiones, porque el breaker es global—
+ * sin cooldown que lo salvara. Concentrar el reporte acá, y decidirlo con
+ * `degradaServidor` (que el tipo obliga a declarar), hace que no se repita.
+ */
+function reportar<E extends TransportError>(error: E, deps: SessionDeps): E {
+  if (error.degradaServidor) deps.breaker.recordDegraded();
+  // El servidor contestó un status HTTP: está vivo. Y de paso libera la sonda
+  // del half-open, que es exactamente lo que antes quedaba colgado.
+  else deps.breaker.recordSuccess();
+  return error;
 }
 
 function cabecera<T>(res: AxiosResponse<T>, nombre: string): string | undefined {
