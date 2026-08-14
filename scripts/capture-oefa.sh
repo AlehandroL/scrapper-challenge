@@ -18,11 +18,17 @@
 #   3. POST paginación       → segunda página, sin solapamiento
 #   4. POST descarga (A)     → experimento: ViewState de la página 2
 #   5. POST descarga (B)     → experimento: ViewState de la página 1
+#   6. POST con ViewState corrupto → cómo se ve una sesión caída
 #
 # Los pasos 4 y 5 son un experimento controlado: mismo conjunto de campos, misma
 # fila, misma sesión. La única variable es de qué página proviene el ViewState.
 # Sirve para determinar si la descarga exige un token alineado con la página
 # donde vive la fila, o si el token es indiferente.
+#
+# El paso 6 es el otro experimento: qué contesta el servidor cuando el token no
+# se puede restaurar. Es el camino que el scraper tiene que reconocer para
+# recuperarse, y no se puede escribir a ciegas: la forma canónica de JSF es un
+# <error> con ViewExpiredException, pero cada sitio la resuelve a su manera.
 #
 # Uso:   bash scripts/capture-oefa.sh
 # Requisitos: curl, perl. Nada más — sin navegador, sin dependencias npm.
@@ -115,7 +121,7 @@ sanitize() {
 # ---------------------------------------------------------------------------
 # 1. GET inicial
 # ---------------------------------------------------------------------------
-paso "1/5  GET inicial — bootstrap de la vista"
+paso "1/6  GET inicial — bootstrap de la vista"
 curl -s --max-time 30 "${COOKIES[@]}" -o "$TMP/01-bootstrap.html" -H "User-Agent: $UA" "$BASE_URL"
 
 VS1="$(viewstate_html "$TMP/01-bootstrap.html")"
@@ -140,7 +146,7 @@ ok "campos del form reenviados: $(( ${#FIELDS[@]} / 2 ))"
 # devuelve la página completa en vez del diff XML, el parser no encuentra
 # <partial-response> y el síntoma se confunde con un bloqueo.
 sleep "$DELAY"
-paso "2/5  POST de búsqueda — evento AJAX"
+paso "2/6  POST de búsqueda — evento AJAX"
 curl -s --max-time 40 "${COOKIES[@]}" -o "$TMP/02-search-partial.xml" \
   -H "User-Agent: $UA" \
   -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
@@ -170,7 +176,7 @@ ok "ViewState rotado: ${#VS1} → ${#VS2} bytes"
 # 3. POST de paginación
 # ---------------------------------------------------------------------------
 sleep "$DELAY"
-paso "3/5  POST de paginación — página 2"
+paso "3/6  POST de paginación — página 2"
 curl -s --max-time 40 "${COOKIES[@]}" -o "$TMP/03-page2-partial.xml" \
   -H "User-Agent: $UA" \
   -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
@@ -217,7 +223,7 @@ UUID="$(printf '%s' "$CMD" | sed -n 2p)"
 [ -n "$COMP_ID" ] && [ -n "$UUID" ] \
   || { echo "ERROR: no se pudo extraer el comando de descarga de la fila 0." >&2; exit 1; }
 
-paso "4/5  POST de descarga (A) — ViewState de la página 2"
+paso "4/6  POST de descarga (A) — ViewState de la página 2"
 echo "  fila 0 · uuid=$UUID"
 echo "  componente=$COMP_ID"
 
@@ -249,7 +255,7 @@ intento_descarga "$VS3" "$TMP/dl-a.bin" "$TMP/dl-a.headers"
 RES_A="$(describe "$TMP/dl-a.bin" "$TMP/dl-a.headers")"
 ok "A → $RES_A"
 
-paso "5/5  POST de descarga (B) — ViewState de la página 1"
+paso "5/6  POST de descarga (B) — ViewState de la página 1"
 intento_descarga "$VS2" "$TMP/dl-b.bin" "$TMP/dl-b.headers"
 RES_B="$(describe "$TMP/dl-b.bin" "$TMP/dl-b.headers")"
 ok "B → $RES_B"
@@ -271,6 +277,61 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 6. Sesión caída — cómo se ve un ViewState que el servidor no puede restaurar
+# ---------------------------------------------------------------------------
+# El scraper tiene que reconocer este caso para recuperarse, así que la forma de
+# la respuesta no se puede asumir: hay que verla. Se corrompe un tramo del medio
+# del blob base64 conservando el largo, de modo que el token llegue bien formado
+# como parámetro pero imposible de deserializar.
+#
+# La forma canónica de JSF es <error><error-name>...ViewExpiredException. No es
+# la única: un sitio puede resolverlo con <redirect> a la página de inicio, que
+# llega con HTTP 200 y sin ninguna mención a la excepción. La diferencia importa,
+# porque un parser que solo mire <error-name> ve un partial-response válido con
+# cero <update> y el síntoma se confunde con «el selector dejó de matchear».
+
+sleep "$DELAY"
+paso "6/6  POST con el ViewState corrupto — sesión caída"
+
+VS_CORRUPTO="$(printf '%s' "$VS3" | perl -pe 'substr($_, 600, 40) = "A" x 40')"
+
+curl -s --max-time 40 "${COOKIES[@]}" -D "$TMP/06.headers" -o "$TMP/06-view-expired.xml" \
+  -H "User-Agent: $UA" \
+  -H 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8' \
+  -H 'Faces-Request: partial/ajax' \
+  -H 'X-Requested-With: XMLHttpRequest' \
+  -H "Referer: $BASE_URL" \
+  --data 'javax.faces.partial.ajax=true' \
+  --data "javax.faces.source=${FORM_ID}:dt" \
+  --data "javax.faces.partial.execute=${FORM_ID}:dt" \
+  --data "javax.faces.partial.render=${FORM_ID}:dt" \
+  --data 'javax.faces.behavior.event=page' \
+  --data "${FORM_ID}:dt_pagination=true" \
+  --data "${FORM_ID}:dt_first=20" \
+  --data "${FORM_ID}:dt_rows=10" \
+  --data "${FORM_ID}:dt_skipChildren=true" \
+  --data "${FORM_ID}:dt_encodeFeature=true" \
+  "${FIELDS[@]}" \
+  --data-urlencode "javax.faces.ViewState=$VS_CORRUPTO" \
+  "$BASE_URL"
+
+CT_6="$(tr -d '\r' < "$TMP/06.headers" | sed -n 's/^[Cc]ontent-[Tt]ype: *//p' | head -1)"
+ok "content-type: ${CT_6:--}   |   $(wc -c < "$TMP/06-view-expired.xml" | tr -d ' ') bytes"
+
+if grep -qi 'error-name' "$TMP/06-view-expired.xml"; then
+  ok "señal: <error> — la forma canónica de JSF"
+  perl -0777 -ne 'print "    $1\n" if /<error-name>(.*?)<\/error-name>/s' "$TMP/06-view-expired.xml"
+elif grep -q '<redirect' "$TMP/06-view-expired.xml"; then
+  ok "señal: <redirect> — sin ninguna mención a ViewExpiredException"
+  perl -0777 -ne 'print "    url=$1\n" if /<redirect url="([^"]*)"/' "$TMP/06-view-expired.xml"
+  warn "un parser que solo mire <error-name> acá ve cero updates y ningún error"
+elif grep -q '<partial-response' "$TMP/06-view-expired.xml"; then
+  warn "partial-response sin <error> ni <redirect>: revisar el cuerpo a mano"
+else
+  warn "la respuesta no es un partial-response: el servidor devolvió otra cosa"
+fi
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 # El PDF no se versiona (el de prueba pesa 9,3 MB): se guardan sus headers y los
@@ -280,6 +341,7 @@ paso "Escribiendo fixtures"
 cp "$TMP/01-bootstrap.html"      "$OUT/01-bootstrap.html"
 cp "$TMP/02-search-partial.xml"  "$OUT/02-search-partial.xml"
 cp "$TMP/03-page2-partial.xml"   "$OUT/03-page2-partial.xml"
+cp "$TMP/06-view-expired.xml"    "$OUT/06-view-expired.xml"
 
 if es_pdf "$TMP/dl-a.bin"; then
   cp "$TMP/dl-a.headers" "$OUT/04-download-a.headers"

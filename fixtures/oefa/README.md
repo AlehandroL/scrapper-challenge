@@ -39,6 +39,7 @@ es el objeto de estudio y no identifica a nadie.
 | `03-page2-partial.xml` | `POST` de paginación. Segunda página, `data-ri` 10–19. |
 | `04-download-a.html` | Intento de descarga con el `ViewState` **desalineado**. HTTP 200 con la página re-renderizada en vez del PDF. |
 | `05-download-b.headers` | Headers del intento con el `ViewState` **alineado**: el PDF real (9,3 MB). |
+| `06-view-expired.xml` | `POST` de paginación con el `ViewState` corrupto. Cómo se ve una sesión caída. |
 
 El PDF no se versiona por tamaño; de `05` interesan los headers y el magic number.
 
@@ -100,6 +101,32 @@ El `º` de `Nº` viene codificado en ISO-8859-1, no en RFC 5987, así que leerlo
 UTF-8 produce mojibake. Es una razón más para nombrar los archivos desde nuestro
 propio metadata (`${uuid}_${slug}.pdf`) y guardar el mapeo autoritativo en el
 JSONL, en vez de confiar en el header.
+
+**`06` — la sesión caída no dice que es una sesión caída.** Se capturó
+corrompiendo un tramo del blob base64 del token, conservando el largo, de modo
+que llegara bien formado como parámetro pero imposible de deserializar. La
+respuesta completa son 113 bytes:
+
+```xml
+<partial-response id="j_id1"><redirect url="/repdig/consulta/consultaInicio.xhtml"></redirect></partial-response>
+```
+
+`HTTP 200`, `content-type: text/xml`. **No hay `<error>`, no hay `<error-name>`,
+y la cadena `ViewExpiredException` no aparece en ninguna parte.** La forma
+canónica de JSF —`<error><error-name>javax.faces.application.ViewExpiredException`—
+es la que documenta la spec y la que casi todo el mundo implementa; este sitio
+resuelve la misma condición con un `<redirect>`.
+
+La consecuencia es concreta: un parser que solo mire `<error-name>` recibe acá un
+`partial-response` perfectamente válido, con cero `<update>` y ningún error. No
+lanza nada. Devuelve cero filas, y el síntoma vuelve a ser «el selector dejó de
+matchear». Por eso el `<redirect>` se trata como señal de sesión caída y no como
+una respuesta vacía más.
+
+Detalle que importa para la máquina de estados: esta respuesta **no trae
+`ViewState`**. Absorber un `undefined` como si fuera un token nuevo dejaría la
+vista sin token y convertiría una condición recuperable en uno de esos errores
+que no se entienden.
 
 ## Un modo de falla que estos fixtures no capturan
 

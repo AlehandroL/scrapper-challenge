@@ -42,7 +42,7 @@ src/
 ├── http/        ✅ sesión, cookie jar, rate limiter, retry, circuit breaker
 ├── obs/         ✅ logging estructurado y métricas de la corrida
 ├── config.ts    ✅ entorno validado con zod
-├── jsf/         ⬜ ViewState, partial-response, serialización de forms, comandos
+├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
 ├── sources/     ⬜ adapters por fuente: oefa.ts, pj.ts
 ├── store/       ⬜ JSONL, checkpointing, dead-letter queue
 ├── validate/    ⬜ sanity checks y validación por esquema
@@ -171,7 +171,75 @@ Lo que **no** se instaló importa igual:
 | `nock`, `msw` | Interceptan a nivel de módulo: no reproducen un socket cortado (`ECONNRESET`) ni ejercitan el jar sobre el camino real de axios. El servidor de pruebas es un `node:http` efímero en puerto 0. |
 | `commander`, `yargs` | `util.parseArgs` es nativo desde Node 18.3. |
 
-### Bloques 3–8
+### Bloque 3 — Capa JSF ✅
 
-Pendientes: capa JSF (ViewState, partial-response, comandos), adapters por
-fuente, descarga de PDFs con DLQ y checkpointing, sanity checks y documentación.
+El protocolo, ya no como fixtures sino como código: bootstrap, evento AJAX,
+submit no-ajax estilo `mojarra.jsfcljs`, y el `ViewState` rotando con un único
+token vigente por sesión.
+
+```bash
+npm test              # 142 tests, sin red
+npm run smoke:jsf     # opt-in: bootstrap → búsqueda → página 2 contra OEFA
+```
+
+El smoke recorre el protocolo completo contra el sitio real y comprueba seis
+cosas: cookie propagada, `ViewState` presente y rotado en cada respuesta,
+`rowCount` 1.753, diez filas por página y páginas sin solapamiento.
+
+**Esta capa no sabe qué es un expediente.** Habla de `ViewState`, de Mojarra y de
+PrimeFaces —para eso existe— pero no de jurisprudencia ni de resoluciones
+ambientales, y [`tests/architecture.test.ts`](tests/architecture.test.ts) lo
+verifica junto con algo más fuerte: **`cheerio` es la única dependencia de
+runtime que `src/jsf/` tiene fuera de sí misma.** Todo lo demás —`Session`,
+`Logger`, `Metrics`— entra como `import type` y llega inyectado, así que la capa
+no puede construirse una sesión por su cuenta ni saltarse el rate limiter.
+
+#### Tres cosas que la implementación descubrió
+
+**La sesión caída no se anuncia como tal.** Se capturó un fixture nuevo
+—[`06-view-expired.xml`](fixtures/oefa/06-view-expired.xml), un POST con el token
+corrompido— y la respuesta son 113 bytes: `200`, `text/xml`, un `<redirect>` a la
+página de inicio. **Sin `<error>`, sin `<error-name>`, y sin que la cadena
+`ViewExpiredException` aparezca en ninguna parte.** La forma canónica de JSF es
+la otra, así que un parser escrito contra la spec habría recibido acá un
+`partial-response` válido con cero `<update>`, sin lanzar nada: cero filas, y el
+síntoma de siempre — «el selector dejó de matchear». Las dos señales se tratan
+como la misma condición.
+
+**Un `<tr>` suelto se descarta en silencio.** La respuesta de paginación no trae
+una tabla: trae una tira de `<tr data-ri="10">` pelados. El algoritmo de parsing
+de HTML descarta un `<tr>` fuera de contexto de tabla, así que cargar ese
+fragmento devuelve **cero filas** — el mismo síntoma que la sesión perdida, esta
+vez causado por nosotros. Envuelto en `<table><tbody>` devuelve las diez. Es un
+test, no un comentario.
+
+**`04-download-a.html` empieza con `<?xml`.** Es una página HTML completa —el
+resultado de pedir un PDF con el `ViewState` desalineado— pero sus primeros
+bytes son `<?xml version='1.0' encoding='UTF-8' ?>` y recién después viene el
+`<!DOCTYPE html>`. Detectar un `partial-response` por cómo arranca el cuerpo,
+que es lo natural, clasifica mal justo el fixture que representa el peor caso.
+
+#### Decisiones que definen la capa
+
+- **Los errores de protocolo no heredan de `TransportError`.** No es estético:
+  `withRetry()` reintenta todo lo que herede de ahí, y un `ViewExpiredError`
+  reintentado cinco veces manda cinco veces el mismo token muerto. El arreglo de
+  una vista caída no es «mandalo de nuevo» sino «reconstruí la vista y replicá el
+  estado de aplicación», y eso no cabe en un `withRetry`.
+- **El `;jsessionid=` se saca de las URLs**, y la cookie queda como única fuente
+  de verdad de la sesión. Es seguro **porque** el bootstrap asevera que la cookie
+  existe: si el sitio propagara la sesión solo por reescritura de URL, falla ahí
+  y no trescientas páginas después con la tabla vacía.
+- **`recover()` no bota la cookie**, aunque §5.1 lo describiera así. Los
+  resultados viven en un bean de sesión: perderla cambia un error ruidoso por
+  cero filas silenciosas. Y es innecesario — si la sesión murió de verdad, el GET
+  trae un `Set-Cookie` nuevo y el jar la reemplaza solo.
+- **La tabla vacía se devuelve como dato, no como excepción.** Esta capa no puede
+  distinguir «se perdió la sesión» de «la búsqueda no tuvo resultados»: para eso
+  hay que saber que el total esperado era 1.753. Ese contexto vive en `sources/`,
+  y ahí van las aserciones duras.
+
+### Bloques 4–8
+
+Pendientes: adapters por fuente, descarga de PDFs con DLQ y checkpointing,
+sanity checks y documentación.
