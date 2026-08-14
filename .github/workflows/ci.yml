@@ -1,14 +1,15 @@
 # Typecheck y suite completa en cada push y cada PR.
 #
-# Sin esto, las 144 aserciones —incluidas las de `tests/architecture.test.ts`,
-# que son las que impiden que la separación de capas se degrade en el tercer
-# apuro— solo corrían cuando alguien se acordaba de ejecutarlas.
+# Sin esto, las aserciones —incluidas las de `tests/architecture.test.ts`, que
+# son las que impiden que la separación de capas se degrade en el tercer apuro—
+# solo corrían cuando alguien se acordaba de ejecutarlas.
 #
-# **Los smokes quedan deliberadamente fuera.** `npm run smoke:oefa` y
-# `npm run smoke:jsf` dependen de la red y golpean el sitio real: meterlos acá
-# convertiría cada push en tráfico contra publico.oefa.gob.pe, que es
-# exactamente lo que el rate limiter existe para evitar. Se corren a mano cuando
-# se quiere evidencia contra el sitio vivo.
+# **Los smokes quedan deliberadamente fuera.** Los cuatro (`smoke:oefa`,
+# `smoke:jsf`, `smoke:source`, `smoke:download`) dependen de la red y golpean el
+# sitio real: meterlos acá convertiría cada push en tráfico contra
+# publico.oefa.gob.pe, que es exactamente lo que el rate limiter existe para
+# evitar. Y `smoke:download` además baja documentos de varios megas. Se corren a
+# mano cuando se quiere evidencia contra el sitio vivo.
 
 name: CI
 

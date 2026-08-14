@@ -47,7 +47,17 @@ export type TipoDrift =
   | 'solapamiento'
   | 'total-inestable'
   | 'page-size'
-  | 'registro-invalido';
+  | 'registro-invalido'
+  /**
+   * La descarga devolvió algo que no es el documento, varias veces seguidas.
+   *
+   * Una sola vez es un fallo y va a la cola de reintentos; N seguidas es el
+   * sitio diciendo otra cosa —la vista se cayó, o cambió la forma del POST de
+   * descarga— y seguir pidiendo mil setecientas filas para acumular mil
+   * setecientos fallos es exactamente el modo de falla que §6.4 existe para
+   * cortar.
+   */
+  | 'descarga-no-pdf';
 
 /**
  * El peor modo de falla de un scraper no es la excepción: es seguir corriendo

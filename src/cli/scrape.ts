@@ -29,18 +29,36 @@ import { createLogger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { SourceError, RangoInvalidoError } from '../sources/errors.ts';
 import { URL_OEFA, createOefaSource } from '../sources/oefa.ts';
+import {
+  borrarCheckpoint,
+  escribirCheckpoint,
+  leerCheckpoint,
+  planificarReanudacion,
+  type Checkpoint,
+} from '../store/checkpoint.ts';
 import { openJsonlWriter, readKeys } from '../store/jsonl.ts';
 
 const SALIDA_POR_DEFECTO = 'data/oefa.jsonl';
+/** Uno por comando: `scrape` y `download` avanzan a ritmos distintos sobre la
+ *  misma fuente, y compartirlo haría que el atrasado se saltee páginas. */
+const CHECKPOINT_POR_DEFECTO = 'data/oefa.scrape.checkpoint.json';
+const TAREA = 'scrape';
+
+/** Se le pasa explícito a la fuente para que el checkpoint no guarde un supuesto. */
+const PAGE_SIZE = 10;
 
 /** `0` ok · `1` la corrida falló · `2` uso incorrecto · `130` interrumpida. */
 export const SALIDA = { ok: 0, fallo: 1, uso: 2, interrumpida: 130 } as const;
 
 export interface OpcionesCli {
-  readonly desde: number;
+  /** Ausente significa «desde donde diga el checkpoint». */
+  readonly desde?: number;
   readonly hasta?: number;
   readonly salida: string;
+  readonly checkpoint: string;
   readonly maxRecuperaciones: number;
+  /** Ignora el checkpoint y recorre desde la primera página. */
+  readonly reiniciar: boolean;
   /** Recorre y valida sin tocar el disco: sirve para probar el sitio sin escribir. */
   readonly dryRun: boolean;
   readonly ayuda: boolean;
@@ -49,15 +67,19 @@ export interface OpcionesCli {
 const AYUDA = `
 Uso: npm run scrape -- [opciones]
 
-  --desde <n>                Primera página (1-based). Por defecto 1.
+  --desde <n>                Primera página (1-based). Por defecto, la del checkpoint.
   --hasta <n>                Última página inclusive. Por defecto, la última.
   --salida <ruta>            Archivo JSONL de salida. Por defecto ${SALIDA_POR_DEFECTO}.
+  --checkpoint <ruta>        Estado de reanudación. Por defecto ${CHECKPOINT_POR_DEFECTO}.
   --max-recuperaciones <n>   Reconstrucciones de la vista permitidas. Por defecto 3.
+  --reiniciar                Ignora el checkpoint y recorre desde el principio.
   --dry-run                  Recorre y valida sin escribir nada.
   --help                     Esto.
 
-La corrida es reanudable: los registros ya presentes en la salida no se
-reescriben, así que repetir el comando completa lo que falte sin duplicar.
+La corrida es reanudable por partida doble: el checkpoint dice en qué página
+quedó el recorrido, y los registros ya presentes en la salida no se reescriben.
+Repetir el comando completa lo que falte sin duplicar ni volver a pedir páginas
+que ya se leyeron.
 `.trimStart();
 
 export function parsearArgs(argv: readonly string[]): OpcionesCli {
@@ -73,7 +95,9 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
         desde: { type: 'string' },
         hasta: { type: 'string' },
         salida: { type: 'string' },
+        checkpoint: { type: 'string' },
         'max-recuperaciones': { type: 'string' },
+        reiniciar: { type: 'boolean', default: false },
         'dry-run': { type: 'boolean', default: false },
         help: { type: 'boolean', default: false },
       },
@@ -83,21 +107,23 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
   }
 
   const { values } = parsed;
-  const desde = enteroPositivo(values.desde, 'desde') ?? 1;
+  const desde = enteroPositivo(values.desde, 'desde');
   const hasta = enteroPositivo(values.hasta, 'hasta');
   const maxRecuperaciones = enteroPositivo(values['max-recuperaciones'], 'max-recuperaciones') ?? 3;
 
-  if (hasta !== undefined && hasta < desde) {
+  if (hasta !== undefined && desde !== undefined && hasta < desde) {
     throw new Error(`Argumentos inválidos: --hasta (${hasta}) es menor que --desde (${desde})`);
   }
 
   return {
-    desde,
-    // `exactOptionalPropertyTypes`: un `hasta: undefined` explícito no compila
-    // contra `hasta?: number`.
+    // `exactOptionalPropertyTypes`: un `desde: undefined` explícito no compila
+    // contra `desde?: number`.
+    ...(desde === undefined ? {} : { desde }),
     ...(hasta === undefined ? {} : { hasta }),
     salida: values.salida ?? SALIDA_POR_DEFECTO,
+    checkpoint: values.checkpoint ?? CHECKPOINT_POR_DEFECTO,
     maxRecuperaciones,
+    reiniciar: values.reiniciar === true,
     dryRun: values['dry-run'] === true,
     ayuda: values.help === true,
   };
@@ -167,8 +193,30 @@ export async function main(argv: readonly string[]): Promise<number> {
   const view = new JsfView({ session, logger, metrics }, { pageUrl: URL_OEFA });
   const fuente = createOefaSource(
     { view, logger, metrics },
-    { maxRecuperaciones: opciones.maxRecuperaciones },
+    { pageSize: PAGE_SIZE, maxRecuperaciones: opciones.maxRecuperaciones },
   );
+
+  if (opciones.reiniciar && !opciones.dryRun) borrarCheckpoint(opciones.checkpoint);
+  let checkpoint: Checkpoint | undefined;
+  try {
+    checkpoint = opciones.reiniciar ? undefined : leerCheckpoint(opciones.checkpoint);
+  } catch (error) {
+    logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'checkpoint ilegible: se ignora');
+  }
+
+  const plan = planificarReanudacion(checkpoint, {
+    fuente: fuente.nombre,
+    tarea: TAREA,
+    pageSize: PAGE_SIZE,
+    ...(opciones.desde === undefined ? {} : { desde: opciones.desde }),
+    ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
+  });
+  if (plan.nadaPendiente !== undefined) {
+    paso('Nada pendiente');
+    ok(plan.nadaPendiente);
+    console.log('  usar --reiniciar para recorrer de nuevo, o --desde <n> para una página puntual');
+    return SALIDA.ok;
+  }
 
   // Los ya escritos se leen **antes** de abrir el writer: abrirlo repara la cola
   // truncada, y quien quiera contar lo que había debe verlo tal cual quedó.
@@ -190,6 +238,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     ok(`se descartaron ${writer.bytesReparados} byte(s) de una línea a medio escribir`);
   }
   if (yaEnDisco.size > 0) ok(`${yaEnDisco.size} registro(s) ya en ${opciones.salida}: se omiten`);
+  if (plan.mensaje !== undefined) ok(plan.mensaje);
 
   // Ctrl-C corta **en el borde de una página**, no en medio de una escritura: el
   // archivo queda consistente y la corrida se retoma con el mismo comando. Un
@@ -205,33 +254,73 @@ export async function main(argv: readonly string[]): Promise<number> {
   let nuevos = 0;
   let omitidos = 0;
   let ultimaPagina = 0;
+  let desde = plan.desde;
+  let totalEsperado = plan.totalEsperado;
+  let recorrerDeNuevo = false;
 
   try {
-    for await (const pagina of fuente.recorrer({
-      desde: opciones.desde,
-      ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
-    })) {
-      for (const { registro } of pagina.filas) {
-        if (yaEnDisco.has(registro.id)) {
-          omitidos += 1;
-          continue;
-        }
-        writer?.append(registro);
-        yaEnDisco.add(registro.id);
-        nuevos += 1;
-      }
-      // Una barrera por página, no por registro: acota la pérdida ante un corte
-      // de energía justo a la granularidad del checkpoint del bloque 5, y 176
-      // fsync no se notan al lado de 176 requests.
-      writer?.flush();
-      ultimaPagina = pagina.numero;
+    do {
+      recorrerDeNuevo = false;
+      let primera = true;
 
-      logger.info(
-        { pagina: pagina.numero, filas: pagina.filas.length, esUltima: pagina.esUltima, nuevos },
-        'página persistida',
-      );
-      if (interrumpido) break;
-    }
+      for await (const pagina of fuente.recorrer({
+        ...(desde === undefined ? {} : { desde }),
+        ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
+      })) {
+        // El checkpoint se termina de validar acá y no antes: el total lo declara
+        // la búsqueda, y el `desde` hay que decidirlo antes de emitirla. Si no
+        // coincide, el organismo publicó algo nuevo, todos los índices se
+        // corrieron y retomar en esta página leería filas que no son las que
+        // faltaban.
+        if (primera) {
+          primera = false;
+          if (totalEsperado !== undefined && pagina.total !== totalEsperado) {
+            logger.warn(
+              { antes: totalEsperado, ahora: pagina.total },
+              'el total cambió desde el checkpoint: se descarta y se recorre desde la página 1',
+            );
+            if (!opciones.dryRun) borrarCheckpoint(opciones.checkpoint);
+            desde = undefined;
+            totalEsperado = undefined;
+            recorrerDeNuevo = true;
+            break;
+          }
+        }
+
+        for (const { registro } of pagina.filas) {
+          if (yaEnDisco.has(registro.id)) {
+            omitidos += 1;
+            continue;
+          }
+          writer?.append(registro);
+          yaEnDisco.add(registro.id);
+          nuevos += 1;
+        }
+        // Una barrera por página, no por registro: acota la pérdida ante un corte
+        // de energía a la granularidad del checkpoint, y 176 fsync no se notan al
+        // lado de 176 requests. El checkpoint va después del fsync, nunca antes:
+        // al revés apuntaría a registros que todavía no están en disco.
+        writer?.flush();
+        ultimaPagina = pagina.numero;
+        if (!opciones.dryRun) {
+          escribirCheckpoint(opciones.checkpoint, {
+            fuente: fuente.nombre,
+            tarea: TAREA,
+            pageSize: PAGE_SIZE,
+            total: pagina.total,
+            ultimaPagina: pagina.numero,
+            registros: nuevos + omitidos,
+            actualizadoEn: new Date().toISOString(),
+          });
+        }
+
+        logger.info(
+          { pagina: pagina.numero, filas: pagina.filas.length, esUltima: pagina.esUltima, nuevos },
+          'página persistida',
+        );
+        if (interrumpido) break;
+      }
+    } while (recorrerDeNuevo && !interrumpido);
   } catch (error) {
     writer?.close();
     process.off('SIGINT', alInterrumpir);
@@ -244,7 +333,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   paso('Resumen');
   ok(`${nuevos} registro(s) nuevo(s), ${omitidos} omitido(s) por ya estar presentes`);
   ok(`última página completada: ${ultimaPagina}`);
-  if (!opciones.dryRun) ok(`salida: ${opciones.salida}`);
+  if (!opciones.dryRun) ok(`salida: ${opciones.salida} · checkpoint: ${opciones.checkpoint}`);
 
   const s = metrics.snapshot();
   console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);

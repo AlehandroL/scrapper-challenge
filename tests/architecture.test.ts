@@ -196,10 +196,28 @@ describe('la capa de persistencia no conoce el dominio', () => {
   const archivos = archivosDe(DIR_STORE);
 
   it('encuentra la capa de persistencia', () => {
-    expect(archivos.map((a) => a.nombre).sort()).toEqual(['jsonl.ts']);
+    expect(archivos.map((a) => a.nombre).sort()).toEqual([
+      'atomico.ts',
+      'checkpoint.ts',
+      'dlq.ts',
+      'files.ts',
+      'jsonl.ts',
+    ]);
   });
 
-  it.each(['oefa', 'jurisprudencia', 'expediente', 'administrado', 'ViewState', 'cheerio', 'uuid'])(
+  it.each([
+    'oefa',
+    'jurisprudencia',
+    'expediente',
+    'administrado',
+    'ViewState',
+    'cheerio',
+    'uuid',
+    // El bloque 5 agregó la escritura de archivos: que `files.ts` valide un
+    // `%PDF-` sería el atajo obvio y la primera grieta. El magic lo pasa el
+    // llamador, y el día que haya que bajar un XLSX esta capa no se toca.
+    'pdf',
+  ])(
     'src/store/ no depende de «%s»',
     (termino) => {
       const culpables = archivos

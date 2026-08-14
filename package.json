@@ -1,6 +1,6 @@
 {
   "name": "scrapper-challenge",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Scraper sin navegador para portales JSF/Mojarra + PrimeFaces",
   "type": "module",
   "private": true,
@@ -12,9 +12,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "scrape": "tsx src/cli/scrape.ts",
+    "download": "tsx src/cli/download.ts",
+    "retry-failed": "tsx src/cli/retry-failed.ts",
     "smoke:oefa": "tsx scripts/smoke-oefa.ts",
     "smoke:jsf": "tsx scripts/smoke-jsf.ts",
-    "smoke:source": "tsx scripts/smoke-source.ts"
+    "smoke:source": "tsx scripts/smoke-source.ts",
+    "smoke:download": "tsx scripts/smoke-download.ts"
   },
   "license": "MIT",
   "dependencies": {
