@@ -18,7 +18,7 @@ import {
   wrapRows,
 } from '../src/jsf/datatable.ts';
 import { parseJsfcljs } from '../src/jsf/commands.ts';
-import { parseForm, stripJsessionid } from '../src/jsf/form.ts';
+import { parseForm, stripJsessionid, toSearchParams } from '../src/jsf/form.ts';
 import { findUpdate, parsePartialResponse } from '../src/jsf/partial-response.ts';
 import { esIdViewState, extractViewState } from '../src/jsf/view-state.ts';
 
@@ -171,13 +171,82 @@ describe('form', () => {
   });
 
   it('conserva el valor de los hidden y vacía los de texto', () => {
-    expect(form!.campos.get(FORM_ID)).toBe(FORM_ID);
-    expect(form!.campos.get(`${FORM_ID}:dt_scrollState`)).toBe('0,0');
-    expect(form!.campos.get(`${FORM_ID}:txtNroexp`)).toBe('');
+    expect(form!.campos.get(FORM_ID)).toEqual([FORM_ID]);
+    expect(form!.campos.get(`${FORM_ID}:dt_scrollState`)).toEqual(['0,0']);
+    expect(form!.campos.get(`${FORM_ID}:txtNroexp`)).toEqual(['']);
   });
 
   it('toma la primera option del select cuando ninguna está selected', () => {
-    expect(form!.campos.get(`${FORM_ID}:idsector`)).toBe('');
+    expect(form!.campos.get(`${FORM_ID}:idsector`)).toEqual(['']);
+  });
+
+  /**
+   * El form de OEFA es todo monovaluado, así que este caso no aparece en los
+   * fixtures — pero un `selectManyCheckbox` es un componente estándar de JSF y
+   * los filtros del bloque 4 pueden traerlo. Con un `Map<string, string>`
+   * sobrevivía **solo el último valor**, en silencio: el peor modo de falla del
+   * proyecto, aplicado al request de salida en vez de a la respuesta.
+   */
+  it('un grupo de checkboxes conserva todos los valores marcados', () => {
+    const doc =
+      `<form id="f" action="/v.xhtml">` +
+      `<input type="checkbox" name="f:sectores" value="A" checked/>` +
+      `<input type="checkbox" name="f:sectores" value="B" checked/>` +
+      `<input type="checkbox" name="f:sectores" value="C" checked/>` +
+      `<input type="checkbox" name="f:sectores" value="D"/>` +
+      `<input type="hidden" name="javax.faces.ViewState" value="T"/></form>`;
+
+    // La no marcada no viaja, igual que en un navegador.
+    expect(parseForm(doc, PAGE_URL)!.campos.get('f:sectores')).toEqual(['A', 'B', 'C']);
+  });
+
+  it('un <select multiple> manda una entrada por opción seleccionada', () => {
+    const doc =
+      `<form id="f" action="/v.xhtml"><select name="f:sectores" multiple>` +
+      `<option value="1" selected>uno</option><option value="2">dos</option>` +
+      `<option value="3" selected>tres</option></select>` +
+      `<input type="hidden" name="javax.faces.ViewState" value="T"/></form>`;
+
+    expect(parseForm(doc, PAGE_URL)!.campos.get('f:sectores')).toEqual(['1', '3']);
+  });
+
+  /**
+   * Sin `multiple` el navegador manda la primera opción cuando ninguna está
+   * marcada; **con** `multiple` no manda nada. Colapsar los dos casos haría que
+   * un filtro vacío viajara con un valor que el usuario nunca eligió.
+   */
+  it('un <select multiple> sin nada seleccionado no manda el campo', () => {
+    const doc =
+      `<form id="f" action="/v.xhtml"><select name="f:sectores" multiple>` +
+      `<option value="1">uno</option><option value="2">dos</option></select>` +
+      `<input type="hidden" name="javax.faces.ViewState" value="T"/></form>`;
+
+    expect(parseForm(doc, PAGE_URL)!.campos.has('f:sectores')).toBe(false);
+  });
+
+  it('toSearchParams emite un par por valor, no uno por campo', () => {
+    const doc =
+      `<form id="f" action="/v.xhtml">` +
+      `<input type="checkbox" name="f:s" value="A" checked/>` +
+      `<input type="checkbox" name="f:s" value="B" checked/>` +
+      `<input type="hidden" name="f:uno" value="x"/>` +
+      `<input type="hidden" name="javax.faces.ViewState" value="T"/></form>`;
+
+    const params = toSearchParams(parseForm(doc, PAGE_URL)!.campos);
+    expect(params.getAll('f:s')).toEqual(['A', 'B']);
+    expect(params.toString()).toBe('f%3As=A&f%3As=B&f%3Auno=x');
+  });
+
+  /** Los extra son parámetros de protocolo: pisan el campo entero, no se suman. */
+  it('un extra pisa todos los valores del campo que lleva su nombre', () => {
+    const doc =
+      `<form id="f" action="/v.xhtml">` +
+      `<input type="checkbox" name="f:s" value="A" checked/>` +
+      `<input type="checkbox" name="f:s" value="B" checked/>` +
+      `<input type="hidden" name="javax.faces.ViewState" value="T"/></form>`;
+
+    const params = toSearchParams(parseForm(doc, PAGE_URL)!.campos, { 'f:s': 'Z' });
+    expect(params.getAll('f:s')).toEqual(['Z']);
   });
 
   it('deja el ViewState fuera de los campos y aparte', () => {

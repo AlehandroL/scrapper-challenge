@@ -150,9 +150,14 @@ describe('headers', () => {
 
 describe('no muta el form', () => {
   it('dos cuerpos seguidos no se contaminan entre sí', () => {
-    const antes = [...form.campos.entries()];
+    // Clonado en profundidad: ahora los valores son arrays, y comparar contra un
+    // snapshot que guarda **las mismas referencias** no detectaría una mutación
+    // in-place. El test se vería verde justo cuando falla.
+    const instantanea = () => [...form.campos].map(([k, v]) => [k, [...v]]);
+
+    const antes = instantanea();
     buildAjaxBody(form, TOKEN, pageCommand({ tableId: TABLE_ID, first: 10, rows: 10 }));
     buildCommandBody(form, TOKEN, { param_uuid: 'x' });
-    expect([...form.campos.entries()]).toEqual(antes);
+    expect(instantanea()).toEqual(antes);
   });
 });

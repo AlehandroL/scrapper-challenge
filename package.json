@@ -1,11 +1,11 @@
 {
   "name": "scrapper-challenge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Scraper sin navegador para portales JSF/Mojarra + PrimeFaces",
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=18.3"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
