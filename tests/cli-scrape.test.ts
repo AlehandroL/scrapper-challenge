@@ -15,34 +15,54 @@ import { SALIDA, parsearArgs } from '../src/cli/scrape.ts';
 describe('parsearArgs', () => {
   it('sin argumentos usa los valores por defecto', () => {
     expect(parsearArgs([])).toEqual({
-      desde: 1,
       salida: 'data/oefa.jsonl',
+      checkpoint: 'data/oefa.scrape.checkpoint.json',
       maxRecuperaciones: 3,
+      reiniciar: false,
       dryRun: false,
       ayuda: false,
     });
   });
 
-  /** `exactOptionalPropertyTypes`: la ausencia es ausencia, no `undefined`. */
-  it('sin --hasta la clave no existe en vez de valer undefined', () => {
-    expect('hasta' in parsearArgs([])).toBe(false);
-    expect('hasta' in parsearArgs(['--hasta', '4'])).toBe(true);
+  /**
+   * `exactOptionalPropertyTypes`: la ausencia es ausencia, no `undefined`.
+   *
+   * En `--desde` la distinción además decide comportamiento: ausente significa
+   * «desde donde diga el checkpoint», y un `1` por defecto habría hecho que la
+   * reanudación por página no se activara nunca.
+   */
+  it.each(['desde', 'hasta'])('sin --%s la clave no existe en vez de valer undefined', (flag) => {
+    expect(flag in parsearArgs([])).toBe(false);
+    expect(flag in parsearArgs([`--${flag}`, '4'])).toBe(true);
   });
 
   it('lee el rango, la salida y el presupuesto', () => {
-    expect(parsearArgs(['--desde', '3', '--hasta', '9', '--salida', '/tmp/x.jsonl', '--max-recuperaciones', '1'])).toEqual({
+    expect(
+      parsearArgs([
+        '--desde', '3',
+        '--hasta', '9',
+        '--salida', '/tmp/x.jsonl',
+        '--checkpoint', '/tmp/x.json',
+        '--max-recuperaciones', '1',
+      ]),
+    ).toEqual({
       desde: 3,
       hasta: 9,
       salida: '/tmp/x.jsonl',
+      checkpoint: '/tmp/x.json',
       maxRecuperaciones: 1,
+      reiniciar: false,
       dryRun: false,
       ayuda: false,
     });
   });
 
-  it.each([['--dry-run', 'dryRun'], ['--help', 'ayuda']])('%s activa %s', (flag, campo) => {
-    expect(parsearArgs([flag])[campo as 'dryRun' | 'ayuda']).toBe(true);
-  });
+  it.each([['--dry-run', 'dryRun'], ['--help', 'ayuda'], ['--reiniciar', 'reiniciar']])(
+    '%s activa %s',
+    (flag, campo) => {
+      expect(parsearArgs([flag])[campo as 'dryRun' | 'ayuda' | 'reiniciar']).toBe(true);
+    },
+  );
 
   it('rechaza una flag desconocida en vez de ignorarla', () => {
     expect(() => parsearArgs(['--hastaa', '3'])).toThrow(/Argumentos inválidos/);

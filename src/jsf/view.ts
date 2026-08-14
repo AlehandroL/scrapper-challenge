@@ -17,6 +17,7 @@
  */
 
 import type { AxiosRequestConfig, AxiosResponse } from 'axios';
+import type { Readable } from 'node:stream';
 
 import type { Session } from '../http/session.ts';
 import type { Logger } from '../obs/logger.ts';
@@ -241,6 +242,36 @@ export class JsfView {
     });
     if (typeof res.data === 'string') this.#absorb(extractViewState(res.data));
     return res;
+  }
+
+  /**
+   * POST no-ajax en **streaming**: el camino de la descarga (§5.4).
+   *
+   * Existe acá, y no como una llamada suelta a `session.stream` desde el
+   * consumidor, porque concentra las dos trampas que tienen el mismo síntoma
+   * —`200` con la página re-renderizada en vez del documento— y ninguna causa
+   * parecida:
+   *
+   * 1. **`session.stream` no pone el `Content-Type`.** `postForm` sí lo pone, y
+   *    `prepareCommand` solo agrega el `Referer`; por el hueco entre los dos, un
+   *    POST en streaming sale sin declarar el encoding del cuerpo y el servidor
+   *    procesa un form vacío.
+   * 2. **No absorbe el token.** Es la diferencia con `submitCommand`, y es
+   *    deliberada: si el servidor contesta la página re-renderizada, esa página
+   *    trae su propio `ViewState`, y absorberlo reemplazaría en silencio el token
+   *    del recorrido por el de una vista que no corresponde. La respuesta acá es
+   *    un binario; no hay nada que absorber.
+   *
+   * Toma el `JsfRequest` ya armado —`prepareCommand(params, viewStateDeLaPagina)`—
+   * en vez de armarlo, justamente porque el token tiene que ser el de la página
+   * donde vive la fila y no el vigente.
+   */
+  streamCommand(req: JsfRequest): Promise<AxiosResponse<Readable>> {
+    return this.#deps.session.stream(req.url, {
+      method: 'post',
+      data: req.body.toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', ...req.headers },
+    });
   }
 
   /**

@@ -46,9 +46,9 @@ src/
 ├── config.ts    ✅ entorno validado con zod
 ├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
 ├── sources/     ✅ adapter OEFA, parsers y esquema del registro · ⬜ pj.ts
-├── store/       ✅ JSONL append + lectura streaming · ⬜ checkpoint, DLQ
+├── store/       ✅ JSONL, escritura atómica de archivos, cola de fallos, checkpoint
 ├── validate/    ⬜ sanity checks sobre el dataset producido
-└── cli/         ✅ scrape · ⬜ download, retry-failed, validate
+└── cli/         ✅ scrape, download, retry-failed · ⬜ validate
 ```
 
 El criterio: la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones
@@ -364,7 +364,127 @@ archivo: en una reanudación todo lo del archivo está legítimamente repetido.
   es estricto y lanza: para `npm run validate` del bloque 6 una cola truncada
   *es* un hallazgo.
 
-### Bloques 5–8
+### Bloque 5 — Descarga de documentos, cola de fallos y reanudación ✅
 
-Pendientes: descarga de PDFs con DLQ y checkpointing, sanity checks sobre el
-dataset producido, adapter del Poder Judicial y documentación final.
+Los PDFs, con validación de integridad, cola de reintentos y checkpoint por
+página.
+
+```bash
+npm run download -- --hasta 3      # tres páginas de documentos a descargas/
+npm run download                   # todo lo que falte, retomando el checkpoint
+npm run download -- --dry-run      # qué bajaría, sin bajar
+npm run retry-failed               # reintenta lo que quedó en la cola
+npm run smoke:download             # opt-in: el experimento de §5.4 contra el sitio real
+```
+
+**Corrida real:** 3 páginas, **30 documentos, 232,6 MB, 34 requests, cero `429` y
+cero reintentos**, en 48 segundos a 1 req/s. Los 30 archivos empiezan con `%PDF-`.
+El manifiesto queda commiteado en
+[`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl); **los binarios no se
+versionan** —entre 0,5 y 18,3 MB cada uno— y esto se dice con todas las letras
+en vez de dejar entender que están. Repetir el comando sale en cero requests. La
+suite son **382 tests sin red**.
+
+#### La restricción que ordena el bloque
+
+`fixtures/oefa/04` y `05` lo dejaron fijado en el bloque 1: **la descarga exige un
+`ViewState` alineado con la página donde vive la fila.** `npm run smoke:download`
+lo vuelve a comprobar contra el sitio vivo, con el mismo código que corre en
+producción y variando solo de qué página viene el token:
+
+```
+token de la página 2 → 200 text/html;charset=UTF-8          ← la página re-renderizada
+token de la página 1 → 200 application/octet-stream "%PDF-" ← el documento
+```
+
+De ahí sale todo lo demás. No hay pipeline «recolectar todo y descargar después»:
+el downloader **recorre y baja intercalado**, y `retry-failed` vuelve a navegar
+hasta la página de cada pendiente en lugar de reproducir un request guardado —por
+eso cada entrada de la cola lleva anotada su página, y por eso recuperar tres
+documentos cuesta el rango que los contiene y no el dataset entero—.
+
+#### Un comando, un producto
+
+`scrape` escribe los registros; `download` escribe el manifiesto, y los dos
+archivos se unen por `id`:
+
+```jsonc
+{"id":"e41f4370…","documentoUuid":"153a6d2a-…","pagina":1,"indice":0,
+ "archivo":"153a6d2a-…_264-2012-oefa-tfa.pdf","bytes":9377728,"sha256":"3c175af6…",
+ "nombreServidor":"attachment;filename=\"RTFA N° 264-2012.pdf\""}
+```
+
+El nombre sale del **identificador del documento** y no del registro, y es la
+consecuencia directa del hallazgo del bloque 4: dos registros pueden compartir un
+PDF (una resolución que alcanza a dos unidades fiscalizables), así que el archivo
+se baja una vez y las dos líneas del manifiesto apuntan al mismo. El
+`content-disposition` se guarda crudo pero no se usa para nombrar: viene en
+ISO-8859-1 sin RFC 5987, y leerlo como UTF-8 produce mojibake.
+
+#### Que nunca quede un `.pdf` que es una página web
+
+Es el peor artefacto posible del bloque, porque no falla: queda en disco, la
+corrida siguiente lo da por bajado y el diagnóstico llega al abrirlo. El cuerpo se
+escribe a un `.parcial`, se validan los primeros bytes contra `%PDF-` y el tamaño
+mínimo, y recién entonces aparece el nombre final con un `rename` atómico. Si algo
+no da, se destruye el stream —un cuerpo sin drenar cuelga el socket— y se borra el
+temporal. **El destino nunca existe a medias.**
+
+#### Qué detiene la corrida y qué solo se anota
+
+| Condición | Qué pasa |
+|---|---|
+| `403` | **Aborta.** Posible ban de IP; insistir es la vía corta al bloqueo (§5.6) |
+| Circuito abierto tras agotar reintentos | **Aborta.** Degradación sostenida |
+| `429`, `5xx`, red, tras agotar reintentos | A la cola; la corrida sigue |
+| Cuerpo que no es el documento | A la cola **y** al contador de inválidas |
+| 3 inválidas seguidas | **Aborta** con drift `descarga-no-pdf` |
+| Fila sin documento publicado | Se cuenta y se sigue: es un dato del sitio |
+| Fallo de disco | **Aborta.** No se arregla reintentando ese documento |
+
+El corte por inválidas seguidas es la red de seguridad que faltaba: **una sesión
+caída durante la descarga no lanza**, devuelve la página de inicio con `200`. Sin
+ese contador, la corrida sigue mil setecientas filas produciendo cero PDFs y una
+cola que nadie va a poder consumir.
+
+#### Reanudación por página
+
+El JSONL ya daba idempotencia por contenido; el checkpoint agrega el **dónde**.
+Sin él, una corrida cortada en la página 150 vuelve a emitir 150 eventos de
+paginación para descubrir que no tiene nada que escribir.
+
+- **El total es el invariante.** §5.7 pide guardar «el hash del conjunto de
+  filtros»; sin filtros reversados (§2.5) ese hash sería una constante, así que el
+  papel lo cumple el total declarado por el sitio. Si cambió, el organismo publicó
+  algo, los índices se corrieron y retomar en la página 151 leería filas que no
+  son las que faltaban: el checkpoint se descarta y se recorre de nuevo.
+- **Uno por comando.** `scrape` y `download` avanzan a ritmos distintos sobre la
+  misma fuente; compartir el archivo haría que el atrasado se saltee páginas que
+  nunca leyó. Van separados por defecto y el checkpoint anota qué comando lo
+  escribió, para que un `--checkpoint` mal apuntado falle en vez de arruinar la
+  corrida en silencio.
+- **La página se marca completada solo si se procesó entera.** Un checkpoint
+  escrito a mitad de página se saltearía las filas que faltaban.
+- **Repetir un comando no hace algo más grande.** `--hasta 3` dos veces seguidas
+  no descarga el dataset entero la segunda: sale en cero requests.
+
+#### Cómo se probó
+
+El portal falso de los tests recuerda con qué offset generó cada token y entrega
+el documento solo si la fila pedida cae en esa ventana; fuera de ella devuelve
+`200` con `text/html`, igual que el sitio real. Sin eso, los tests de descarga
+pasarían con un downloader que manda cualquier token y el fallo se descubriría al
+abrir los archivos. Sobre esa base, 44 tests nuevos cubren el token desalineado,
+el cuerpo que no es un PDF, el que pesa cuatro bytes, el `403` que aborta, el
+`429` que va a la cola, el documento compartido que se baja una sola vez, y el
+ciclo completo fallar → encolar → reintentar → cola vacía.
+
+Ese ciclo también se ejercitó contra el sitio real: se encoló a mano un documento
+de la página 2, se corrió `npm run retry-failed`, y el comando navegó hasta esa
+página, recuperó el archivo y dejó la cola vacía en 4 requests.
+
+### Bloques 6–8
+
+Pendientes: sanity checks sobre el dataset producido, adapter del Poder Judicial y
+documentación final.
+

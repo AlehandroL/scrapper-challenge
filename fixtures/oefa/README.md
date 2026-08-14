@@ -99,8 +99,10 @@ archivos `.pdf` que son páginas web.
 content-disposition: attachment;filename="RTFA N? 264-2012.pdf"
 ```
 
-El `º` de `Nº` viene codificado en ISO-8859-1, no en RFC 5987, así que leerlo como
-UTF-8 produce mojibake. Es una razón más para nombrar los archivos desde nuestro
+El `°` de `N°` es el byte `0xB0` crudo —ISO-8859-1, no RFC 5987—, así que leerlo
+como UTF-8 produce mojibake. Acá quedó guardado como `N?` porque la terminal que
+capturó los headers no supo dibujarlo; el byte del archivo es el correcto, y el
+bloque 5 lo confirmó contra el sitio vivo. Es una razón más para nombrar los archivos desde nuestro
 propio metadata (`${uuid}_${slug}.pdf`) y guardar el mapeo autoritativo en el
 JSONL, en vez de confiar en el header.
 

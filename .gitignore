@@ -6,9 +6,14 @@ planes/
 # cada quien la produce desde su propia red.
 evidencia/
 
-# Los PDFs descargados no se versionan: el de prueba pesa 9,3 MB.
+# Los PDFs descargados no se versionan: el de prueba pesa 9,3 MB. El manifiesto
+# —el mapeo id → archivo, con tamaño y hash— sí, que es la evidencia de qué se
+# bajó y cuánto pesaba.
 *.pdf
 descargas/
+
+# Estado de reanudación: es de cada corrida y de cada máquina, no un entregable.
+*.checkpoint.json
 
 tmp/
 node_modules/

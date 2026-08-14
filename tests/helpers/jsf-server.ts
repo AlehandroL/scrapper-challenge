@@ -21,6 +21,15 @@
  * caída como `<redirect>`, la página completa cuando falta `Faces-Request`, y el
  * más caro de todos —la paginación que devuelve `200` con la tabla vacía porque
  * los resultados viven en un bean de sesión (§2.5)—.
+ *
+ * Y sirve documentos, que es lo que el bloque 5 necesita. La parte que importa no
+ * es devolver bytes con `%PDF-`: es **modelar la alineación del `ViewState`**. El
+ * servidor recuerda con qué offset generó cada token, y el POST no-ajax entrega
+ * el documento solo si la fila pedida cae dentro de esa ventana. Fuera de ella
+ * devuelve `04-download-a.html` —`200`, `text/html`, la página re-renderizada—,
+ * que es literalmente lo que el sitio real contestó en el experimento de §5.4.
+ * Sin eso, un test de descarga pasaría con un downloader que manda cualquier
+ * token.
  */
 
 import http from 'node:http';
@@ -155,6 +164,20 @@ export interface JsfTestServer {
   dropSessions(): void;
   /** Responde la página completa aunque venga `Faces-Request`. */
   forceFullPage(): void;
+  /** Las descargas responden este código HTTP. `undefined` las vuelve a la normalidad. */
+  fallarDescargas(status: number | undefined): void;
+  /**
+   * Las descargas devuelven HTML aunque el token esté alineado.
+   *
+   * Con `data-ri` explícitos, solo esas filas: es lo que permite intercalar
+   * inválidas con éxitos y ver si el contador de inválidas seguidas se reinicia
+   * como corresponde.
+   */
+  descargasNoPdf(indices?: readonly number[]): void;
+  /** El cuerpo empieza con `%PDF-` pero pesa cuatro bytes. */
+  descargasCortas(): void;
+  /** Ninguna descarga se considera alineada: el caso de §5.4, siempre. */
+  desalinearDescargas(): void;
   /** Cambia el dataset a mitad de corrida (solo en modo sintético). */
   ajustarDataset(parche: Partial<OpcionesDataset>): void;
   close(): Promise<void>;
@@ -171,11 +194,60 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
   let emitirCookie = true;
   let paginaCompleta = false;
   let trampa: { first: number; veces: number } | undefined;
+  let statusDescarga: number | undefined;
+  let descargaNoPdf: 'todas' | readonly number[] | undefined;
+  let descargaCorta = false;
+  let descargaDesalineada = false;
 
-  const rotar = (): string => {
+  /** Con qué offset se generó cada token: la memoria que hace decidible §5.4. */
+  const offsetDelToken = new Map<string, number>();
+
+  const rotar = (offset?: number): string => {
     generacion += 1;
     token = `TOKEN-${generacion}`;
+    if (offset !== undefined) offsetDelToken.set(token, offset);
     return token;
+  };
+
+  /**
+   * El POST no-ajax de `mojarra.jsfcljs`.
+   *
+   * La ventana de alineación es `[offset, offset + pageSize)`: el `dt:<ri>:` del
+   * comando referencia la fila por su posición dentro del árbol de componentes, y
+   * ese índice solo significa lo correcto en el estado que el token restaura.
+   */
+  const responderDescarga = (res: http.ServerResponse, fields: URLSearchParams): void => {
+    hits['descarga'] = (hits['descarga'] ?? 0) + 1;
+
+    if (statusDescarga !== undefined) {
+      return responder(res, statusDescarga, 'text/plain;charset=UTF-8', 'no');
+    }
+
+    const clave = [...fields.keys()].find((k) => /:dt:\d+:/.test(k));
+    const ri = clave === undefined ? undefined : Number(/:dt:(\d+):/.exec(clave)?.[1]);
+    const offset = offsetDelToken.get(fields.get('javax.faces.ViewState') ?? '');
+    const tam = dataset?.pageSize ?? 10;
+
+    const alineado =
+      !descargaDesalineada && ri !== undefined && offset !== undefined && ri >= offset && ri < offset + tam;
+    const forzarHtml =
+      descargaNoPdf === 'todas' || (Array.isArray(descargaNoPdf) && ri !== undefined && descargaNoPdf.includes(ri));
+
+    // Token de otra página: 200, text/html, la página re-renderizada y ni un byte
+    // de PDF. Es el resultado exacto del experimento de §5.4.
+    if (!alineado || forzarHtml) {
+      return responder(res, 200, 'text/html;charset=UTF-8', PAGINA_COMPLETA);
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'application/octet-stream',
+      // ISO-8859-1 y sin RFC 5987, como el fixture `05`: el sitio manda el byte
+      // 0xB0 crudo —Node parsea los headers como latin1— y leerlo como UTF-8
+      // produce mojibake. El fixture lo guardó como `N?` porque la terminal no
+      // supo dibujarlo.
+      'Content-Disposition': 'attachment;filename="RTFA N\u00b0 264-2012.pdf"',
+    });
+    res.end(pdfSintetico(fields.get('param_uuid') ?? '', descargaCorta));
   };
 
   const server = http.createServer((req, res) => {
@@ -185,6 +257,8 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
 
     if (req.method === 'GET') {
       if (emitirCookie) res.setHeader('Set-Cookie', `${NOMBRE_COOKIE}=s-${generacion}; Path=/; HttpOnly`);
+      // Sin offset: el bootstrap no renderizó ninguna página de resultados, así
+      // que su token no alinea con ninguna fila.
       return responder(res, 200, 'text/html;charset=UTF-8', conTokenHtml(BOOTSTRAP, rotar()));
     }
 
@@ -194,8 +268,13 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
       const fields = new URLSearchParams(Buffer.concat(trozos).toString('utf8'));
       posts.push({ path: ruta, fields, headers: req.headers as Record<string, string | undefined> });
 
+      // Un POST sin `Faces-Request` es, o bien una descarga (`mojarra.jsfcljs`),
+      // o bien un evento ajax al que se le olvidó el header. Se distinguen por el
+      // comando de fila: los dos casos se resuelven abajo y el segundo termina
+      // igual que en el sitio real, con la página entera.
       const esAjax = req.headers['faces-request'] === 'partial/ajax';
-      if (!esAjax || paginaCompleta) {
+      if (!esAjax) return responderDescarga(res, fields);
+      if (paginaCompleta) {
         // Sin el header, el servidor renderiza la página entera. Es el síntoma
         // que se confunde con un bloqueo del sitio.
         return responder(res, 200, 'text/html;charset=UTF-8', PAGINA_COMPLETA);
@@ -232,16 +311,22 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
       }
 
       if (dataset === undefined) {
+        // Los fixtures son dos páginas fijas: la búsqueda trae los data-ri 0–9 y
+        // cualquier evento de paginación, los 10–19.
         const cuerpo = esBusqueda ? BUSQUEDA : PAGINA2;
-        return responder(res, 200, 'text/xml;charset=UTF-8', conTokenPartial(cuerpo, rotar()));
+        return responder(res, 200, 'text/xml;charset=UTF-8', conTokenPartial(cuerpo, rotar(esBusqueda ? 0 : 10)));
       }
 
+      // El offset que se anota es el de las filas **servidas**, no el pedido: con
+      // `offsetFijo` el servidor ignora el `dt_first` y el token corresponde a lo
+      // que efectivamente mandó.
+      const offsetServido = esBusqueda ? (dataset.offsetFijo ?? 0) : (dataset.offsetFijo ?? first);
       const html = esBusqueda ? tablaCompleta(dataset) : filasDe(dataset, first);
       return responder(
         res,
         200,
         'text/xml;charset=UTF-8',
-        partial([[esBusqueda ? LISTA : TABLA, html]], rotar()),
+        partial([[esBusqueda ? LISTA : TABLA, html]], rotar(offsetServido)),
       );
     });
   });
@@ -261,6 +346,10 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
     expireAs: (modo) => void (modoExpiracion = modo),
     dropSessions: () => void (emitirCookie = false),
     forceFullPage: () => void (paginaCompleta = true),
+    fallarDescargas: (status) => void (statusDescarga = status),
+    descargasNoPdf: (indices) => void (descargaNoPdf = indices ?? 'todas'),
+    descargasCortas: () => void (descargaCorta = true),
+    desalinearDescargas: () => void (descargaDesalineada = true),
     ajustarDataset: (parche) => {
       if (dataset === undefined) throw new Error('ajustarDataset requiere modo sintético');
       dataset = { ...dataset, ...parche };
@@ -271,6 +360,20 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
         server.close((err) => (err ? reject(err) : resolve()));
       }),
   };
+}
+
+/**
+ * Un cuerpo con forma de PDF, determinístico por documento.
+ *
+ * Lleva el identificador adentro para que un test pueda aseverar **qué**
+ * documento quedó en cada archivo, y no solo que quedó alguno: es la diferencia
+ * entre detectar que el downloader confundió dos filas y contar bien archivos
+ * equivocados. Pesa más de 1 KB para pasar el tamaño mínimo por defecto.
+ */
+function pdfSintetico(documento: string, corto: boolean): Buffer {
+  if (corto) return Buffer.from('%PDF-', 'latin1');
+  const relleno = `%${'0123456789'.repeat(120)}\n`;
+  return Buffer.from(`%PDF-1.4\n%\xe2\xe3\xcf\xd3\n% documento=${documento}\n${relleno}%%EOF\n`, 'latin1');
 }
 
 function responder(res: http.ServerResponse, status: number, contentType: string, cuerpo: string): void {
