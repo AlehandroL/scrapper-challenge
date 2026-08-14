@@ -45,10 +45,10 @@ src/
 ├── obs/         ✅ logging estructurado y métricas de la corrida
 ├── config.ts    ✅ entorno validado con zod
 ├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
-├── sources/     ⬜ adapters por fuente: oefa.ts, pj.ts
-├── store/       ⬜ JSONL, checkpointing, dead-letter queue
-├── validate/    ⬜ sanity checks y validación por esquema
-└── cli/         ⬜
+├── sources/     ✅ adapter OEFA, parsers y esquema del registro · ⬜ pj.ts
+├── store/       ✅ JSONL append + lectura streaming · ⬜ checkpoint, DLQ
+├── validate/    ⬜ sanity checks sobre el dataset producido
+└── cli/         ✅ scrape · ⬜ download, retry-failed, validate
 ```
 
 El criterio: la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones
@@ -187,7 +187,7 @@ submit no-ajax estilo `mojarra.jsfcljs`, y el `ViewState` rotando con un único
 token vigente por sesión.
 
 ```bash
-npm test              # 149 tests, sin red
+npm test              # la suite completa, sin red
 npm run smoke:jsf     # opt-in: bootstrap → búsqueda → página 2 contra OEFA
 ```
 
@@ -248,7 +248,123 @@ que es lo natural, clasifica mal justo el fixture que representa el peor caso.
   hay que saber que el total esperado era 1.753. Ese contexto vive en `sources/`,
   y ahí van las aserciones duras.
 
-### Bloques 4–8
+### Bloque 4 — Adapter, parsers y persistencia ✅
 
-Pendientes: adapters por fuente, descarga de PDFs con DLQ y checkpointing,
-sanity checks y documentación.
+El protocolo convertido en datos: bootstrap → búsqueda → una página por evento,
+con las filas parseadas, validadas por esquema y escritas en JSONL.
+
+```bash
+npm run scrape -- --hasta 3      # tres páginas a data/oefa.jsonl
+npm run scrape                   # el dataset completo (176 páginas, ~6 min)
+npm run smoke:source             # opt-in: el adapter contra el sitio real
+```
+
+**Corrida real, con el output commiteado en [`data/oefa.jsonl`](data/oefa.jsonl):**
+las 176 páginas, 1.753 filas recorridas, 177 requests, **cero `429` y cero
+reintentos** a 1 req/s. En el archivo quedan **1.749 registros** — la diferencia
+son cuatro filas que el propio portal publica repetidas, byte por byte, en la
+misma página (una de ellas tres veces); no aportan información y se deduplican al
+persistir. 131 registros no tienen documento asociado. La suite son **285 tests
+sin red**, incluidos los que ejercitan los dos hallazgos de abajo contra fixtures
+reales.
+
+La corrida es **reanudable e idempotente**: antes de arrancar lee las identidades
+que el archivo ya tiene y no las reescribe. Repetir el comando completa lo que
+falte; correrlo dos veces sobre el mismo rango escribe cero líneas. `Ctrl-C`
+corta en el borde de una página, nunca en medio de una escritura.
+
+#### Lo que el sitio enseñó a la fuerza
+
+Las dos correcciones de diseño de este bloque no salieron de leer el portal con
+cuidado. Salieron de correrlo entero contra aserciones deliberadamente estrictas
+y ver dónde se rompían. **Las dos son la misma equivocación vista desde lados
+opuestos: usar el identificador del PDF como si fuera la clave del registro.**
+
+**Corrida 1, registro 37 de 1.753 — hay filas sin documento.** OEFA publica
+algunas resoluciones como «Información confidencial»: sin número y sin enlace de
+descarga. Son registros legítimos —expediente, administrado, unidad fiscalizable
+y sector están completos— a los que el organismo decidió no publicarles el PDF.
+La aserción «toda fila tiene uuid» los daba por rotos.
+
+**Corrida 2, registro 277 — y hay documentos compartidos.** Las filas 277 y 278
+tienen el mismo expediente, el mismo administrado, la misma resolución y el mismo
+PDF; se distinguen por la unidad fiscalizable. Una resolución que alcanza a dos
+unidades es un registro por unidad y un solo documento.
+
+Un identificador que a veces falta y a veces se repite no es una clave. El
+registro lleva ahora un `id` derivado de su contenido y un `documentoUuid`
+opcional, y el parser distingue dos condiciones que antes eran una sola:
+
+| Condición | Significado | Política |
+|---|---|---|
+| La celda no trae `<a onclick>` | El sitio no publicó el documento | Dato: se persiste y se cuenta |
+| Hay `<a onclick>` y no se deja leer | Cambió la forma del `onclick` | Drift: se detiene la corrida |
+
+Ambos casos quedaron capturados como fixtures
+([`07`](fixtures/oefa/07-page4-confidencial.xml),
+[`08`](fixtures/oefa/08-page28-uuid-repetida.xml)) con tests que los ejercitan sin
+red. Vale la pena decir qué se llevó cada opción: aserciones estrictas costaron
+dos corridas y un rediseño; escritas flojas desde el principio habrían costado un
+dataset con registros faltantes y nadie enterándose.
+
+#### Detección de drift (§6.4)
+
+Nueve condiciones detienen la corrida, cada una con su tipo, su contexto y un
+test que la ve saltar —una aserción que nunca se vio fallar es una aserción que
+no se sabe si funciona:
+
+| Condición | Qué detecta |
+|---|---|
+| `sin-filas` | La sesión perdida: sin cookie la paginación devuelve `200` con la tabla vacía |
+| `sin-total` | La búsqueda no reportó `rowCount`: sin total no hay última página |
+| `pagina-incompleta` | Llegaron menos filas de las que corresponden a ese offset |
+| `indices-desalineados` | El servidor ignoró el `dt_first` y re-renderizó otra página |
+| `numeracion` | Las celdas se corrieron dentro de la fila |
+| `columnas` | Cambió la estructura de la tabla |
+| `sin-uuid` | El `onclick` cambió de forma |
+| `solapamiento` | La paginación no avanzó: todas las filas ya se habían leído |
+| `total-inestable` | El total cambió a mitad de recorrido, invalidando los offsets |
+| `page-size` | El widget declara otro tamaño de página que el configurado |
+
+Los rótulos de las columnas, en cambio, **avisan y no detienen**: cambian por una
+tilde o un renombre editorial sin que cambie nada más, y una aserción que tumba
+la corrida por cosmética es una aserción que alguien va a desactivar.
+
+Dos de estos chequeos hacen falta juntos y ninguno reemplaza al otro.
+`indices-desalineados` ve al servidor que ignoró el offset; `solapamiento` ve al
+que respetó los `data-ri` pero sirvió el contenido de otra página. Y el
+solapamiento se compara contra lo visto **en esta corrida**, nunca contra el
+archivo: en una reanudación todo lo del archivo está legítimamente repetido.
+
+#### Decisiones que definen la capa
+
+- **El `ViewState` de cada página viaja con la página, no con el registro.**
+  §5.4 probó que la descarga exige un token alineado con la página donde vive la
+  fila. Pero es un blob de 1,5 KB y un identificador de sesión: multiplicado por
+  1.753 registros infla el JSONL diez veces para guardar algo que no sirve en la
+  corrida siguiente. Vive en memoria, en la `Pagina`.
+- **La `JsfView` llega inyectada.** `src/sources/` no importa nada de
+  `src/http/` —ni siquiera como tipo—, así que el adapter no puede construirse
+  una sesión propia ni saltarse el rate limiter. Quien cablea es `cli/`, y
+  [`tests/architecture.test.ts`](tests/architecture.test.ts) lo verifica.
+- **La recuperación rehace la búsqueda, y después verifica.** `recover()` deja la
+  vista lista y el bean de resultados vacío; volver a paginar sin volver a buscar
+  devuelve la tabla vacía. El adapter es quien sabe qué se estaba buscando, así
+  que la recuperación vive acá. Y el repaginado no es ciego: si el bean quedó en
+  la página 1, `indices-desalineados` lo denuncia. Tope de un intento por offset,
+  para que una vista que expira siempre en la misma página no cicle.
+- **El writer del JSONL es síncrono.** Un `WriteStream` bufferea, y con buffer
+  pendiente un `process.exit()` pierde líneas ya reportadas como escritas. A un
+  request por segundo el costo de `writeSync` es ruido frente a la latencia de
+  red, y a cambio «la llamada volvió» significa «los bytes están en el kernel».
+  Un `fsync` por página, no por registro.
+- **Al abrir se repara la cola truncada.** Una caída deja media línea al final;
+  el siguiente append la concatenaría con el registro nuevo. Se trunca al último
+  salto de línea y se reporta cuántos bytes se descartaron. El lector, en cambio,
+  es estricto y lanza: para `npm run validate` del bloque 6 una cola truncada
+  *es* un hallazgo.
+
+### Bloques 5–8
+
+Pendientes: descarga de PDFs con DLQ y checkpointing, sanity checks sobre el
+dataset producido, adapter del Poder Judicial y documentación final.

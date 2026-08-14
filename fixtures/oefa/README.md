@@ -40,6 +40,8 @@ es el objeto de estudio y no identifica a nadie.
 | `04-download-a.html` | Intento de descarga con el `ViewState` **desalineado**. HTTP 200 con la página re-renderizada en vez del PDF. |
 | `05-download-b.headers` | Headers del intento con el `ViewState` **alineado**: el PDF real (9,3 MB). |
 | `06-view-expired.xml` | `POST` de paginación con el `ViewState` corrupto. Cómo se ve una sesión caída. |
+| `07-page4-confidencial.xml` | `POST` de paginación a la página 4. Dos filas publicadas como «Información confidencial», sin enlace de descarga. |
+| `08-page28-uuid-repetida.xml` | `POST` de paginación a la página 28. Dos filas distintas que comparten el mismo documento. |
 
 El PDF no se versiona por tamaño; de `05` interesan los headers y el magic number.
 
@@ -127,6 +129,67 @@ Detalle que importa para la máquina de estados: esta respuesta **no trae
 `ViewState`**. Absorber un `undefined` como si fuera un token nuevo dejaría la
 vista sin token y convertiría una condición recuperable en uno de esos errores
 que no se entienden.
+
+**`07` — no todas las filas tienen documento.** Capturado en el bloque 4, y no
+por diseño: la primera corrida completa se detuvo en el registro 37 de 1.753
+contra una aserción propia que daba por sentado que toda fila tenía un enlace de
+descarga.
+
+```html
+<td …>3739-2009-PRODUCE/DIGSECOVI-Dsvs</td>
+<td …>Tecnologías en Favor del Medio Ambiente S.A.C.</td>
+…
+<td …>Información confidencial</td>   <!-- número de resolución -->
+<td …>Información confidencial</td>   <!-- archivo: sin <a>, sin onclick -->
+```
+
+Dos de las diez filas de esa página vienen así. Son registros **legítimos**
+—expediente, administrado, unidad fiscalizable y sector están completos— a los
+que el organismo decidió no publicarles la resolución.
+
+La corrección de diseño que forzó vale más que el fixture: **la identidad de un
+registro y el identificador de su documento son dos cosas distintas**, y
+conflarlas funciona exactamente hasta la primera fila sin PDF. Ahora el registro
+lleva `uuid` (identidad, derivada del contenido cuando no hay documento) y
+`documentoUuid` (opcional). Y el parser distingue dos condiciones que antes eran
+una sola:
+
+| Condición | Significado | Política |
+|---|---|---|
+| No hay `<a onclick>` | El sitio no publicó el documento | Dato: se persiste el registro y se cuenta |
+| Hay `<a onclick>` y no se deja leer | Cambió la forma del `onclick` | Drift: se detiene la corrida |
+
+Colapsarlas en «no hay uuid» obliga a elegir entre perder registros legítimos o
+dejar de detectar que el sitio cambió. Con la distinción no hay que elegir.
+
+**`08` — y tampoco es único.** La corrida siguiente se detuvo veinticuatro
+páginas más adelante, contra la otra mitad del mismo supuesto. Las filas 277 y
+278 comparten expediente, administrado, resolución **y documento**:
+
+| | fila 277 | fila 278 |
+|---|---|---|
+| Expediente | `2007-053` | `2007-053` |
+| Administrado | Compañía Minera Atacocha S.A.A. | Compañía Minera Atacocha S.A.A. |
+| Resolución | `068-2013-OEFA/TFA` | `068-2013-OEFA/TFA` |
+| Documento | `85116078-…` | `85116078-…` |
+| **Unidad fiscalizable** | **Atacocha Concesión de Beneficio Chicrin N° 2** | **Atacocha y Concesión de Beneficio Chicrin N° 12** |
+
+Una misma resolución alcanzando a dos unidades fiscalizables: un registro por
+unidad, un solo PDF. Perfectamente coherente con el dominio, y letal para un
+esquema que use el identificador del documento como clave primaria.
+
+Los dos fixtures juntos dicen lo mismo desde los dos lados: **el identificador
+del documento no es una clave**. A veces falta y a veces se repite. La identidad
+del registro se deriva de su contenido —expediente, administrados, unidad,
+sector, resolución y documento cuando lo hay— y el `documentoUuid` queda como un
+atributo más.
+
+Vale anotar cómo aparecieron los dos: no salieron de leer el sitio con cuidado,
+sino de correrlo entero contra aserciones deliberadamente estrictas. Cada una
+falló donde tenía que fallar, con el número de fila y el motivo. Una aserción que
+se relaja después de ver la evidencia costó dos corridas; la misma aserción
+escrita floja desde el principio habría costado un dataset con registros
+faltantes y nadie enterándose.
 
 ## Un modo de falla que estos fixtures no capturan
 

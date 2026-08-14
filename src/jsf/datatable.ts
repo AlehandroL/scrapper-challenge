@@ -101,3 +101,21 @@ export function isEmptyTable(html: string): boolean {
 export function wrapRows(fragment: string): string {
   return `<table><tbody>${fragment}</tbody></table>`;
 }
+
+/**
+ * `rows` del mismo script de init que reporta `rowCount`.
+ *
+ * Se lee en vez de hardcodearse porque el tamaño de página es lo que traduce un
+ * número de página a un offset: con un `10` supuesto contra un servidor que
+ * pasó a `20`, el evento pide `_first=1730` y el servidor contesta filas
+ * perfectamente válidas de otro lugar del dataset. No hay excepción, no hay
+ * filas faltantes, y el resultado es un archivo con huecos que parece completo.
+ *
+ * Anclado dentro del objeto `paginator:{…}` y no a un `rows:` suelto: la
+ * configuración del widget crece entre versiones y matchear la primera
+ * coincidencia sería apostar a que ninguna clave nueva empiece igual.
+ */
+export function readPageSize(html: string): number | undefined {
+  const m = html.match(/paginator:\s*\{[^}]*\brows:\s*(\d+)/);
+  return m?.[1] === undefined ? undefined : Number(m[1]);
+}

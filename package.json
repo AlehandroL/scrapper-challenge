@@ -11,8 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "scrape": "tsx src/cli/scrape.ts",
     "smoke:oefa": "tsx scripts/smoke-oefa.ts",
-    "smoke:jsf": "tsx scripts/smoke-jsf.ts"
+    "smoke:jsf": "tsx scripts/smoke-jsf.ts",
+    "smoke:source": "tsx scripts/smoke-source.ts"
   },
   "license": "MIT",
   "dependencies": {
