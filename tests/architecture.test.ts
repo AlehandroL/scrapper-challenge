@@ -13,6 +13,8 @@ import { describe, expect, it } from 'vitest';
 
 const DIR_HTTP = join(import.meta.dirname, '..', 'src', 'http');
 const DIR_JSF = join(import.meta.dirname, '..', 'src', 'jsf');
+const DIR_SOURCES = join(import.meta.dirname, '..', 'src', 'sources');
+const DIR_STORE = join(import.meta.dirname, '..', 'src', 'store');
 
 function archivosDe(dir: string): { nombre: string; contenido: string }[] {
   return readdirSync(dir)
@@ -131,6 +133,87 @@ describe('la capa de protocolo no conoce el dominio', () => {
         culpables.push(`${nombre} → ${origen}`);
       }
     }
+
+    expect(culpables).toEqual([]);
+  });
+});
+
+/**
+ * La otra mitad de la afirmación de §4: «la capa `sources/` no sabe nada de
+ * reintentos ni de cookies».
+ *
+ * Se sostiene con una regla concreta y no con buena voluntad: el adapter recibe
+ * la `JsfView` ya construida. No puede armarse una sesión propia, y por lo tanto
+ * no puede saltarse el rate limiter ni el circuit breaker aunque alguien tenga
+ * apuro. Quien cablea es `cli/`, que es el único lugar donde eso corresponde.
+ */
+describe('la capa de dominio no conoce el transporte', () => {
+  const archivos = archivosDe(DIR_SOURCES);
+
+  it('encuentra la capa de fuentes', () => {
+    expect(archivos.map((a) => a.nombre).sort()).toEqual([
+      'errors.ts',
+      'oefa-rows.ts',
+      'oefa.ts',
+      'types.ts',
+    ]);
+  });
+
+  it.each(['axios', 'CookieJar', 'RateLimiter', 'CircuitBreaker', 'withRetry', 'Retry-After'])(
+    'src/sources/ no depende de «%s»',
+    (termino) => {
+      const culpables = archivos
+        .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+        .map((a) => a.nombre);
+
+      expect(culpables).toEqual([]);
+    },
+  );
+
+  it('src/sources/ no importa de src/http/ ni siquiera como tipo', () => {
+    const culpables = archivos
+      .filter((a) => /from '\.\.\/http\//.test(a.contenido))
+      .map((a) => a.nombre);
+
+    expect(culpables).toEqual([]);
+  });
+
+  it('src/sources/ no importa de capas superiores', () => {
+    const culpables = archivos
+      .filter((a) => /from '\.\.\/(store|validate|cli)\//.test(a.contenido))
+      .map((a) => a.nombre);
+
+    expect(culpables).toEqual([]);
+  });
+});
+
+/**
+ * `store/` es la capa más fácil de contaminar: cuando haga falta deduplicar por
+ * un campo nuevo, la tentación va a ser leerlo acá. Por eso `readKeys` recibe un
+ * extractor en vez de conocer `uuid`, y por eso este test existe.
+ */
+describe('la capa de persistencia no conoce el dominio', () => {
+  const archivos = archivosDe(DIR_STORE);
+
+  it('encuentra la capa de persistencia', () => {
+    expect(archivos.map((a) => a.nombre).sort()).toEqual(['jsonl.ts']);
+  });
+
+  it.each(['oefa', 'jurisprudencia', 'expediente', 'administrado', 'ViewState', 'cheerio', 'uuid'])(
+    'src/store/ no depende de «%s»',
+    (termino) => {
+      const culpables = archivos
+        .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+        .map((a) => a.nombre);
+
+      expect(culpables).toEqual([]);
+    },
+  );
+
+  it('src/store/ no importa de ninguna otra capa del proyecto', () => {
+    const culpables = archivos
+      .filter((a) => /from '\.\.?\/(http|jsf|sources|validate|cli|obs)\//.test(a.contenido))
+      .map((a) => a.nombre);
 
     expect(culpables).toEqual([]);
   });
