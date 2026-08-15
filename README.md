@@ -47,8 +47,8 @@ src/
 ├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
 ├── sources/     ✅ adapter OEFA, parsers y esquema del registro · ⬜ pj.ts
 ├── store/       ✅ JSONL, escritura atómica de archivos, cola de fallos, checkpoint
-├── validate/    ⬜ sanity checks sobre el dataset producido
-└── cli/         ✅ scrape, download, retry-failed · ⬜ validate
+├── validate/    ✅ sanity checks sobre el dataset y los documentos producidos
+└── cli/         ✅ scrape, download, retry-failed, validate
 ```
 
 El criterio: la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones
@@ -361,8 +361,8 @@ archivo: en una reanudación todo lo del archivo está legítimamente repetido.
 - **Al abrir se repara la cola truncada.** Una caída deja media línea al final;
   el siguiente append la concatenaría con el registro nuevo. Se trunca al último
   salto de línea y se reporta cuántos bytes se descartaron. El lector, en cambio,
-  es estricto y lanza: para `npm run validate` del bloque 6 una cola truncada
-  *es* un hallazgo.
+  es estricto y lanza: para `npm run validate` una cola truncada *es* un
+  hallazgo, no algo que haya que reparar en silencio.
 
 ### Bloque 5 — Descarga de documentos, cola de fallos y reanudación ✅
 
@@ -483,8 +483,115 @@ Ese ciclo también se ejercitó contra el sitio real: se encoló a mano un docum
 de la página 2, se corrió `npm run retry-failed`, y el comando navegó hasta esa
 página, recuperó el archivo y dejó la cola vacía en 4 requests.
 
-### Bloques 6–8
+### Bloque 6 — Sanity checks sobre lo entregado ✅
 
-Pendientes: sanity checks sobre el dataset producido, adapter del Poder Judicial y
-documentación final.
+Los dos archivos que se entregan, revisados por un comando en vez de por un
+párrafo de este README (§6.3).
+
+```bash
+npm run validate                                    # dataset + manifiesto, sin red
+npm run validate -- --descargas descargas --hash    # además, los archivos en disco
+npm run validate -- --contra-el-sitio               # opt-in: 2 requests al portal
+```
+
+Veinticinco chequeos, veintisiete con `--contra-el-sitio`. Sobre los archivos
+commiteados, con los PDFs al lado y preguntándole el total al portal:
+
+```
+Dataset — data/oefa.jsonl
+  ✓ cobertura            1.749 presente(s) + 4 deduplicada(s) = 1.753, el total que el portal declara ahora
+  ✓ anio-sin-parsear     los 1.618 registro(s) con documento tienen año de resolución
+  ⚠ indices-ausentes     4 posición(es) sin registro entre 0 y 1752 · ej.: 294, 521, 522, 1026
+Documentos — data/oefa.descargas.jsonl
+  ✓ hash-distinto        30 archivo(s) con el sha256 que el manifiesto declara
+Contra el sitio
+  ✓ sitio-primera-pagina las 10 filas de la página 1 están en el dataset
+
+  0 error(es) · 2 aviso(s) · 25 ok · 0 no evaluable(s)
+```
+
+La suite son **460 tests sin red**, e incluye uno que corre este mismo informe
+sobre los archivos commiteados y exige cero errores: tener sanity checks y
+haberlos corrido no son lo mismo, y con el test la diferencia deja de depender de
+que alguien se acuerde.
+
+#### Encontró un defecto en su primera corrida
+
+Que es para lo que existe. El chequeo del año —el «porcentaje de fechas
+parseadas» de §6.3— reportó **29 resoluciones con documento publicado y sin
+año**. El parser exigía `-` o fin de cadena después de las cuatro cifras, y el
+portal también publica `019-2014/TFA-SEP1`, sin el segmento `-OEFA`, y
+`075-2013 -OEFA/TFA`, con un espacio de más. Ninguno de los ocho fixtures tenía
+esas formas; aparecieron recorriendo las 1.753 filas.
+
+El arreglo es un delimitador más flojo a la derecha con la protección puesta del
+otro lado —`(?!\d)`, para que `-20145` no entregue 2014— y el dataset se
+regeneró completo: mismos 1.749 ids, mismos conteos, 29 registros que ganaron su
+año y ninguno que cambiara de otra cosa. Después del arreglo el invariante quedó
+limpio y verificable de un vistazo: **los 1.618 registros con documento tienen
+año, y los 131 que no lo tienen son exactamente los que el portal marca
+«Información confidencial»**, sin número de resolución y sin PDF.
+
+#### Cuatro niveles, y el que importa es «no evaluable»
+
+Un chequeo que no pudo correr no es un chequeo que pasó. Si la carpeta de
+descargas no está —y no está: los binarios no se versionan—, la integridad de los
+archivos se reporta `–` y nunca `✓`. Un informe que dice «los 30 archivos están
+bien» sin haber abierto uno es peor que no tener informe, porque además da
+confianza. Lo mismo con la cobertura: sin un total declarado, el archivo solo
+prueba una **cota inferior**, y una corrida cortada en la última página se ve
+idéntica a una completa.
+
+De ahí sale `--contra-el-sitio`, que cuesta dos requests y contesta el primer
+sanity check de §6.3 sin depender de un checkpoint que `.gitignore` no versiona.
+Pregunta el total y compara las diez filas que el portal muestra hoy contra el
+archivo, que es una afirmación más fuerte: cubre el caso en que el organismo
+publicó algo y todos los índices se corrieron.
+
+| Condición | Nivel |
+|---|---|
+| Línea ilegible, esquema roto, campo obligatorio vacío | **Error** |
+| Identidad o posición repetida; página que no concuerda con el índice | **Error** |
+| Archivo del manifiesto ausente, de otro tamaño o de otro contenido | **Error** |
+| Huecos de posición por filas que el portal publica repetidas | Aviso |
+| Documento compartido por registros con expedientes distintos | Aviso |
+| Cola de fallos con pendientes | Aviso |
+| Cualquier chequeo que no se pudo correr | No evaluable |
+
+#### El segundo hallazgo: un documento con dos expedientes
+
+§5.8 describió el documento compartido como un caso local —las filas 277 y 278,
+mismo expediente y misma resolución, distinta unidad fiscalizable—. El recorrido
+completo encontró además un par que comparte PDF con **expedientes distintos y
+seiscientas filas de distancia** (índices 1061 y 1689, misma resolución
+`034-2016-OEFA/TFA-SEM`). La invariante que se puede afirmar es la resolución, no
+el expediente. Queda como aviso y no como error: el portal tiene resoluciones que
+acumulan expedientes, y una aserción que tumba la corrida por eso es una aserción
+que alguien va a desactivar.
+
+#### La capa no hace I/O
+
+`src/validate/` no abre archivos ni emite requests: recibe datos y devuelve
+hallazgos. El esquema del registro llega inyectado como función, la sonda de
+disco también, y la consulta al portal igual —por eso el modo `--contra-el-sitio`
+se prueba sin red—. El cableado vive en `src/cli/validate.ts`, que es donde ya
+vive el de `scrape` y `download`, y
+[`tests/architecture.test.ts`](tests/architecture.test.ts) lo verifica.
+
+No es preferencia estética: probar los tres desenlaces del disco —está, no está,
+no se pudo mirar— con un validador que abre archivos exige un directorio temporal
+por caso; con la sonda inyectada, cada uno es una línea. El corolario es que
+`sanity.ts`, `informe.ts` y `documentos.ts` no saben qué es un expediente, así
+que los chequeos estructurales sirven tal cual para el próximo portal. Lo
+específico de OEFA está acorralado en un archivo.
+
+**Lo que este bloque no hizo, porque ya estaba hecho:** la detección de drift de
+§6.4. Las diez condiciones que detienen una corrida viven en el adapter desde el
+bloque 4. Aquéllas miran mientras se lee; éstas miran el archivo terminado, y
+fallan distinto: un drift detiene la corrida, un dataset con huecos termina en
+cero y nadie se entera.
+
+### Bloques 7–8
+
+Pendientes: adapter del Poder Judicial y documentación final.
 
