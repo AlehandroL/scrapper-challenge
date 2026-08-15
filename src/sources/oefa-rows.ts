@@ -291,10 +291,20 @@ function leerCampos(celdas: Seleccion): CamposOefa | undefined {
  * El año de `264-2012-OEFA/TFA` o de `007-2016-OEFA/TFA-SEPIM`.
  *
  * Acotado a un rango plausible: sin eso, un correlativo de cuatro dígitos entre
- * guiones se convertiría en un año y el dato quedaría peor que ausente.
+ * guiones se convertiría en un año y el dato quedaría peor que ausente. El
+ * `(?!\d)` es el otro lado de esa misma protección: sin él, `-20145` entregaría
+ * 2014.
+ *
+ * **La primera versión exigía `-` o fin de cadena después del año, y eso dejó 29
+ * resoluciones sin año** —el 1,8% de las que tienen documento publicado—. El
+ * portal no escribe siempre `264-2012-OEFA/TFA`: también publica
+ * `019-2014/TFA-SEP1`, sin el segmento `-OEFA`, y `075-2013 -OEFA/TFA`, con un
+ * espacio de más. Ninguna de las dos formas aparecía en los fixtures; las
+ * encontró `npm run validate` recorriendo el dataset completo, que es justo para
+ * lo que existe el bloque 6.
  */
 export function anioDeResolucion(resolucion: string): number | undefined {
-  for (const m of resolucion.matchAll(/-(\d{4})(?:-|$)/g)) {
+  for (const m of resolucion.matchAll(/-\s*(\d{4})(?!\d)/g)) {
     const anio = Number(m[1]);
     if (anio >= 1900 && anio <= 2100) return anio;
   }

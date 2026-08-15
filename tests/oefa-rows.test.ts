@@ -236,10 +236,32 @@ describe('derivaciones', () => {
     expect(anioDeResolucion(resolucion)).toBe(esperado);
   });
 
-  /** OEFA no publica fecha; un correlativo de cuatro dígitos no es un año. */
-  it.each([['sin año'], ['12-0345-X'], ['']])('no inventa un año para «%s»', (resolucion) => {
-    expect(anioDeResolucion(resolucion)).toBeUndefined();
+  /**
+   * Los dos formatos que la primera versión del parser no cubría, y que ningún
+   * fixture tenía: los encontró `npm run validate` sobre el dataset completo, 29
+   * resoluciones con documento publicado y sin año. El regex exigía `-` o fin de
+   * cadena después del año, y el portal escribe `/TFA-SEP1` sin el segmento
+   * `-OEFA`, o mete un espacio antes del guion.
+   */
+  it.each([
+    ['019-2014/TFA-SEP1', 2014],
+    ['027-2014/TFA-SE1', 2014],
+    ['075-2013 -OEFA/TFA', 2013],
+  ])('extrae el año de «%s», que el regex viejo perdía', (resolucion, esperado) => {
+    expect(anioDeResolucion(resolucion)).toBe(esperado);
   });
+
+  /**
+   * OEFA no publica fecha; un correlativo de cuatro dígitos no es un año. El
+   * `-20145` es la contracara del arreglo de arriba: aflojar el delimitador de
+   * la derecha no puede convertir un número de cinco cifras en 2014.
+   */
+  it.each([['sin año'], ['12-0345-X'], [''], ['001-20145-OEFA/TFA'], ['Información confidencial']])(
+    'no inventa un año para «%s»',
+    (resolucion) => {
+      expect(anioDeResolucion(resolucion)).toBeUndefined();
+    },
+  );
 
   it('el paginador tolera separadores de miles', () => {
     expect(parsePaginador('Página 3 de 1.760 (17.593 registros)')).toEqual({

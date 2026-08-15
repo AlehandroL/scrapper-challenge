@@ -15,6 +15,7 @@ const DIR_HTTP = join(import.meta.dirname, '..', 'src', 'http');
 const DIR_JSF = join(import.meta.dirname, '..', 'src', 'jsf');
 const DIR_SOURCES = join(import.meta.dirname, '..', 'src', 'sources');
 const DIR_STORE = join(import.meta.dirname, '..', 'src', 'store');
+const DIR_VALIDATE = join(import.meta.dirname, '..', 'src', 'validate');
 
 function archivosDe(dir: string): { nombre: string; contenido: string }[] {
   return readdirSync(dir)
@@ -235,4 +236,71 @@ describe('la capa de persistencia no conoce el dominio', () => {
 
     expect(culpables).toEqual([]);
   });
+});
+
+/**
+ * `validate/` es la capa del bloque 6, y la regla que la ordena es una sola:
+ * **no hace I/O**. Recibe datos ya leídos y devuelve hallazgos.
+ *
+ * No es preferencia estética. Un validador que abre archivos por su cuenta se
+ * prueba montando archivos, y probar los tres desenlaces del disco —está, no
+ * está, no se pudo mirar— exige entonces un directorio temporal por caso. Con la
+ * sonda inyectada, cada uno es una línea. La contrapartida es que el cableado
+ * vive en `cli/validate.ts`, que es donde ya vive el de `scrape` y `download`.
+ *
+ * Y el corolario que importa para el próximo portal: `sanity.ts`, `informe.ts` y
+ * `documentos.ts` no saben qué es un expediente. El esquema del registro llega
+ * inyectado como función, igual que `store/jsonl.ts` recibe un extractor de
+ * clave en vez de conocer `uuid`. Lo específico de OEFA vive en un solo archivo.
+ */
+describe('la capa de validación no hace I/O', () => {
+  const archivos = archivosDe(DIR_VALIDATE);
+
+  it('encuentra la capa de validación', () => {
+    expect(archivos.map((a) => a.nombre).sort()).toEqual([
+      'documentos.ts',
+      'informe.ts',
+      'oefa.ts',
+      'sanity.ts',
+    ]);
+  });
+
+  it.each(['node:fs', 'node:path', 'readFileSync', 'axios', 'fetch('])(
+    'src/validate/ no depende de «%s»',
+    (termino) => {
+      const culpables = archivos
+        .filter((a) => soloCodigo(a.contenido).includes(termino))
+        .map((a) => a.nombre);
+
+      expect(culpables).toEqual([]);
+    },
+  );
+
+  it('src/validate/ no importa de ninguna otra capa salvo tipos de sources/', () => {
+    const culpables: string[] = [];
+
+    for (const { nombre, contenido } of archivos) {
+      for (const m of contenido.matchAll(/^import\s+(type\s+)?[\s\S]*?from\s+'([^']+)';/gm)) {
+        const [, esTipo, origen] = m;
+        if (origen === undefined || origen.startsWith('./')) continue;
+        if (origen.startsWith('../sources/') && esTipo !== undefined) continue;
+        culpables.push(`${nombre} → ${origen}`);
+      }
+    }
+
+    expect(culpables).toEqual([]);
+  });
+
+  /** El dominio, acorralado en un archivo: el resto sirve para el próximo portal. */
+  it.each(['expediente', 'administrado', 'resoluci', 'confidencial', 'oefa'])(
+    'los chequeos genéricos no mencionan «%s»',
+    (termino) => {
+      const culpables = archivos
+        .filter((a) => a.nombre !== 'oefa.ts')
+        .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+        .map((a) => a.nombre);
+
+      expect(culpables).toEqual([]);
+    },
+  );
 });
