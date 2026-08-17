@@ -119,6 +119,32 @@ Cinco minutos de diagnóstico que evitaron invertir en soluciones anti-bot para 
 que no era anti-bot. La secuencia está en [`scripts/check-access.sh`](scripts/check-access.sh),
 reutilizable contra cualquier fuente nueva.
 
+**Falta una cuarta capa, y se agregó después de necesitarla.** Las tres primeras miran el
+problema desde un único punto de vista: el propio. Eso alcanza para leer un `403` —llegaste y
+te rechazaron— pero no para leer un `ECONNREFUSED`, porque «me bloquearon a mí» y «está caído
+para todos» producen el mismo síntoma desde una sola red. La cuarta capa varía el origen sin
+cambiarse de red: le pide a nodos de terceros repartidos por el mundo que intenten el mismo
+TCP, y **sondea junto a cada objetivo un control que se espera que conecte**. Sin ese control
+el sondeo miente en silencio, porque «nadie llega» es también lo que se ve cuando el que está
+roto es el servicio de terceros.
+
+Lo que hizo falta para escribirla: el 17 de agosto de 2026 `publico.oefa.gob.pe` dejó de
+responder. Desde Chile, `ECONNREFUSED` en 22, 80, 443, 8080 y 8443. La cuarta capa lo resolvió
+en veinte segundos —0 de 15 nodos conectan al portal, 14 de 14 al vecino del mismo `/24`— y el
+script ahora lo dice con todas las letras en vez de imprimir un `000` sin interpretar:
+
+```
+publico.oefa.gob.pe (sitio de desarrollo)      0/15 conectan
+209.45.104.100 (control, mismo /24)           14/14 conectan
+
+OEFA está CAÍDO para todos: 0 nodos externos conectan, y el control
+del mismo /24 conecta desde 14. No es tu IP.
+```
+
+Y el contraste con el objetivo, en la misma corrida, es la lección: `jurisprudencia.pj.gob.pe`
+conecta desde 13 de 15 nodos. Su `403` vive en la capa de aplicación, después del handshake.
+Un bloqueo y una caída no se parecen en nada **cuando se los mira desde varios lados**.
+
 **2. Separar el problema de acceso del problema de protocolo.** El 80 % del trabajo técnico
 —`ViewState`, partial-response, paginación, descargas, rate limiting— es el mismo y no
 requiere IP peruana. Bloquearse esperando resolver el acceso antes de empezar a programar es
@@ -205,7 +231,7 @@ Lo que sí se entrega es el cierre convertido en dos comandos, para quien tenga 
 peruana:
 
 ```bash
-bash scripts/check-access.sh    # IP, país, ASN, el objetivo, el control del mismo /24, y la matriz de decisión
+bash scripts/check-access.sh    # IP, país, ASN, el objetivo, sus controles, la vista de terceros y la matriz de decisión
 npm run smoke:pj                # ejercita el adapter entero contra el sitio vivo
 ```
 
@@ -275,7 +301,7 @@ habría obligado a sacarlos después.
 | `npm run smoke:pj` | sí | El adapter del Poder Judicial contra su sitio |
 | `bash scripts/capture-oefa.sh` | sí | Regenera los fixtures de OEFA |
 | `bash scripts/capture-pj.sh` | sí | Regenera los fixtures del PJ desde el archivo web |
-| `bash scripts/check-access.sh` | sí | Diagnóstico de acceso al portal objetivo |
+| `bash scripts/check-access.sh` | sí | Diagnóstico de acceso en cuatro capas, con vista de terceros. `--sin-terceros` lo deja local |
 
 **Los cinco smokes quedan fuera de `npm test` a propósito.** La suite no debe depender de la
 red ni golpear un sitio real en cada push: sería exactamente lo que el rate limiter existe
