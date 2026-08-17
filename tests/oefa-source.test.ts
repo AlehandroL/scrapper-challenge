@@ -213,11 +213,11 @@ describe('detección de drift (§6.4)', () => {
     const fuente = await montar({ total: 23 }, {}, { requireSessionCookie: false });
     server.dropSessions();
 
-    const it = fuente.recorrer()[Symbol.asyncIterator]();
-    const primera = await it.next();
+    const iter = fuente.recorrer()[Symbol.asyncIterator]();
+    const primera = await iter.next();
     expect(primera.value?.filas).toHaveLength(10);
 
-    await esperarDrift(it.next(), 'sin-filas');
+    await esperarDrift(iter.next(), 'sin-filas');
   });
 
   it('una página incompleta que no es la última', async () => {
@@ -364,14 +364,14 @@ describe('recuperación de la vista caída (§5.1)', () => {
 
   it('agota el presupuesto tras varias recuperaciones en offsets distintos', async () => {
     const fuente = await montar({ total: 100 }, { maxRecuperaciones: 1 });
-    const it = fuente.recorrer()[Symbol.asyncIterator]();
-    await it.next();
+    const iter = fuente.recorrer()[Symbol.asyncIterator]();
+    await iter.next();
 
     server.expirarEnOffset(10);
-    await it.next();
+    await iter.next();
     server.expirarEnOffset(20);
 
-    await expect(it.next()).rejects.toMatchObject({ motivo: 'presupuesto' });
+    await expect(iter.next()).rejects.toMatchObject({ motivo: 'presupuesto' });
   });
 
   /**
@@ -380,13 +380,13 @@ describe('recuperación de la vista caída (§5.1)', () => {
    */
   it('detecta que el total cambió entre búsquedas', async () => {
     const fuente = await montar({ total: 100 });
-    const it = fuente.recorrer()[Symbol.asyncIterator]();
-    await it.next();
+    const iter = fuente.recorrer()[Symbol.asyncIterator]();
+    await iter.next();
 
     server.ajustarDataset({ total: 300 });
     server.expirarEnOffset(10);
 
-    await expect(it.next()).rejects.toMatchObject({ tipo: 'total-inestable' });
+    await expect(iter.next()).rejects.toMatchObject({ tipo: 'total-inestable' });
   });
 
   /** El drift no se cura reintentando: sale derecho sin gastar recuperaciones. */
@@ -429,10 +429,10 @@ describe('el seam de descarga (§5.4)', () => {
 
   it('rechaza una página emitida antes de una recuperación', async () => {
     const fuente = await montar({ total: 23 });
-    const it = fuente.recorrer()[Symbol.asyncIterator]();
-    const primera = (await it.next()).value;
+    const iter = fuente.recorrer()[Symbol.asyncIterator]();
+    const primera = (await iter.next()).value;
     server.expirarEnOffset(10);
-    await it.next();
+    await iter.next();
 
     const fila = primera?.filas[0];
     if (primera === undefined || fila === undefined) throw new Error('sin página');

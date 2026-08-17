@@ -310,9 +310,9 @@ describe('form', () => {
       `<html><body><form id="vistaJsf" action="/vista.xhtml"><input name="dato" value="y"/>` +
       `<input type="hidden" name="javax.faces.ViewState" value=""/></form></body></html>`;
 
-    const form = parseForm(doc, PAGE_URL);
-    expect(form).toBeDefined();
-    expect(form!.viewState).toBeUndefined();
+    const conTokenVacio = parseForm(doc, PAGE_URL);
+    expect(conTokenVacio).toBeDefined();
+    expect(conTokenVacio!.viewState).toBeUndefined();
   });
 });
 

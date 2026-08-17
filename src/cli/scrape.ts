@@ -106,7 +106,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (error) {
-    throw new Error(`Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
   }
 
   const { values } = parsed;
@@ -350,6 +350,9 @@ export async function main(argv: readonly string[]): Promise<number> {
         );
         if (interrumpido) break;
       }
+      // `interrumpido` lo escribe el handler de SIGINT, fuera del cuerpo del
+      // bucle: el linter no puede verlo y lo lee como una condición muerta.
+      // oxlint-disable-next-line no-unmodified-loop-condition
     } while (recorrerDeNuevo && !interrumpido);
   } catch (error) {
     writer?.close();

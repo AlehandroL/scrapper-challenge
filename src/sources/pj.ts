@@ -452,9 +452,10 @@ class PjSource implements Fuente<RegistroPj> {
    * perfectamente válidas de la página equivocada.
    */
   async #emitir(comando: ComandoDescubierto): Promise<string> {
-    const res = await this.#view.submitCommand(comando.params, {
-      ...(comando.formulario === undefined ? {} : { formId: comando.formulario }),
-    });
+    const res = await this.#view.submitCommand(
+      comando.params,
+      comando.formulario === undefined ? {} : { formId: comando.formulario },
+    );
     const html = typeof res.data === 'string' ? res.data : '';
     this.#view.adoptarPagina(html);
     return html;

@@ -130,7 +130,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (e) {
-    throw new Error(`Argumentos inválidos: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`Argumentos inválidos: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
   }
 
   const { values } = parsed;

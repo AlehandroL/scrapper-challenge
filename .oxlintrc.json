@@ -1,0 +1,46 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // Por qué oxlint y no ESLint: este repo fija `typescript@7`, el compilador
+  // nativo en Go, cuyo paquete npm ya no expone la API de compilador — solo
+  // `./lib/version.cjs` y los `./unstable/*`. `typescript-eslint` declara peer
+  // `typescript >=4.8.4 <6.1.0`, así que `npm ci` fallaría con ERESOLVE, y
+  // forzado revienta dentro de `typescript-estree`. oxlint es un binario nativo
+  // sin dependencias JS: no toca el paquete `typescript` en absoluto.
+  //
+  // El linteo con información de tipos queda para más adelante: exige el peer
+  // `oxlint-tsgolint`, que todavía está en preview. Mientras tanto lo cubre
+  // `npm run typecheck`, que corre con el modo estricto al máximo.
+
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+
+  "rules": {
+    // Los siete `sort()` del repo ordenan arrays recién creados por `map()` o
+    // por spread. `toSorted()` protege de mutar un array ajeno, y acá no hay
+    // array ajeno: cambiarlos solo agregaría una copia más.
+    "unicorn/no-array-sort": "off",
+
+    // Los helpers chicos declarados dentro de la función que los usa son
+    // deliberados: `salir`, `entero`, `numero` y `celda` se leen donde se usan
+    // y no tienen otro llamador. Subirlos al scope del módulo los aleja de su
+    // único punto de uso a cambio de una asignación por llamada.
+    "unicorn/consistent-function-scoping": "off",
+
+    // `_` es el índice descartado de un `.each()` de cheerio, y en
+    // `src/jsf/form.ts` hay uno anidado dentro de otro. Que el nombre vacío se
+    // repita es la convención, no un descuido: lo que la regla protege —perder
+    // de vista una variable con significado— no aplica a un placeholder.
+    "no-shadow": ["error", { "allow": ["_"] }]
+  },
+
+  "ignorePatterns": [
+    // Markup real capturado de los portales: es evidencia, no código.
+    "fixtures/**",
+    "data/**",
+    "evidencia/**",
+    "descargas/**"
+  ]
+}
