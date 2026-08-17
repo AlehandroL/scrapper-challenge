@@ -1,7 +1,7 @@
 {
   "name": "scrapper-challenge",
-  "version": "0.7.0",
-  "description": "Scraper sin navegador para portales JSF/Mojarra + PrimeFaces",
+  "version": "0.8.0",
+  "description": "Scraper sin navegador para portales JSF/Mojarra",
   "type": "module",
   "private": true,
   "engines": {

@@ -2,506 +2,380 @@
 
 [![CI](https://github.com/AlehandroL/scrapper-challenge/actions/workflows/ci.yml/badge.svg)](https://github.com/AlehandroL/scrapper-challenge/actions/workflows/ci.yml)
 
-Scraper en TypeScript, **sin automatización de navegador**, para el portal de
-Jurisprudencia Nacional Sistematizada del Poder Judicial del Perú.
+Scraper en TypeScript, **sin automatización de navegador**, para portales que corren
+JSF/Mojarra — un framework *stateful* donde la paginación y las descargas no son URLs sino
+eventos POST contra un árbol de componentes que vive en el servidor.
 
-## El problema real
+Descubrir la estructura del sitio es parte explícita del enunciado, así que este repositorio
+documenta el proceso: qué se observó, qué se dedujo, qué hipótesis se descartaron y cuáles
+refutó la evidencia. El hilo completo está en la [bitácora](docs/bitacora.md).
 
-El portal corre sobre **JSF/Mojarra con PrimeFaces**: un framework *stateful*
-donde la paginación, los filtros y las descargas no son URLs direccionables sino
-eventos POST contra un árbol de componentes que vive en el servidor. No existe
-`?page=2`. Resolverlo sin navegador exige replicar a mano el protocolo del token
-`ViewState`, y ese es el núcleo del desafío.
-
-Descubrir la estructura del sitio es parte explícita del enunciado, así que este
-repositorio documenta el proceso de descubrimiento —qué se observó, qué se
-dedujo, qué hipótesis se descartaron y cuáles se refutaron con evidencia— y no
-solo el resultado.
-
-## Dos sitios
+## Qué produjo
 
 | | |
 |---|---|
-| **Objetivo** | `jurisprudencia.pj.gob.pe` — detrás de Radware Cloud WAF, responde `403` desde Chile |
-| **Desarrollo** | `publico.oefa.gob.pe` — mismo stack (Mojarra + PrimeFaces), acceso abierto |
+| **Dataset** | [`data/oefa.jsonl`](data/oefa.jsonl) — 1.749 registros, de 1.753 filas recorridas en 176 páginas |
+| **Documentos** | [`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl) — 30 PDFs, 232,6 MB, con tamaño y `sha256` |
+| **Corrida del dataset** | 177 requests a 1 req/s, **cero 429 y cero reintentos**, ~6 min |
+| **Suite** | 546 tests **sin red**, 2,5 s, contra Node 20, 22 y 24 en CI |
+| **Sanity checks** | `npm run validate` — 25 chequeos, 0 errores y 2 avisos conocidos sobre lo entregado |
 
-El 403 no es anti-bot: un diagnóstico por capas descartó fingerprinting TLS/JA3,
-headers, huella HTTP/2 y allowlist por UA. El discriminante es un atributo de la
-IP de origen. Como el trabajo de protocolo es idéntico en ambos sitios y no
-requiere IP peruana, el desarrollo se hace contra OEFA y la fuente se abstrae
-detrás de un adapter.
+El sitio objetivo —`jurisprudencia.pj.gob.pe`— responde `403` desde Chile. Su adapter está
+escrito y testeado contra markup real del portal, pero **no se ejercitó contra su fuente**, y
+eso se declara acá y lo imprime el propio CLI antes de tocar la red. El detalle, en
+[dos sitios](#dos-sitios-y-qué-se-corrió-contra-cada-uno) y en
+[limitaciones conocidas](#limitaciones-conocidas).
 
-**Decisión de alcance declarada:** no se contrata VPN ni proxy residencial para
-esta entrega. El diagnóstico de acceso al Poder Judicial queda abierto y el
-adapter del PJ **no se ejercita contra su fuente**. `scripts/check-access.sh`
-cierra ese diagnóstico en un comando desde cualquier red con salida peruana, y
-`npm run smoke:pj` ejercita el adapter entero desde ahí. No se simula cobertura
-que no se logró.
+## Cómo se corre
 
-Lo que sí se consiguió sin acceso es **markup real del portal objetivo**: el
-archivo web lo sirve desde su propio dominio, y esos snapshots refutaron cuatro
-supuestos sobre los que el adapter se iba a escribir — entre ellos que el sitio
-corriera PrimeFaces. Está en el bloque 7.
-
-## Estructura
-
-```
-src/
-├── http/        ✅ sesión, cookie jar, rate limiter, retry, circuit breaker
-├── obs/         ✅ logging estructurado y métricas de la corrida
-├── config.ts    ✅ entorno validado con zod
-├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
-├── sources/     ✅ adapters OEFA y PJ, aserciones compartidas, registro de fuentes
-├── store/       ✅ JSONL, escritura atómica de archivos, cola de fallos, checkpoint
-├── validate/    ✅ sanity checks sobre el dataset y los documentos producidos
-└── cli/         ✅ scrape, download, retry-failed, validate — los cuatro con --fuente
-```
-
-El criterio: la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones
-ambientales, y la capa `sources/` no sabe nada de reintentos ni de cookies. La
-capa de protocolo debe ser reutilizable para el próximo portal legacy.
-
-`obs/` no estaba en el plan original. Se agregó porque el logging y las métricas
-son transversales: `sources/` y `store/` también van a emitir, así que meterlos
-dentro de `http/` habría obligado a sacarlos después.
-
-## Estado
-
-Trabajo en curso, organizado en bloques.
-
-### Bloque 1 — Reversing del protocolo ✅
-
-Los tres requests que definen el protocolo están replicados **sin navegador** y
-guardados como fixtures en [`fixtures/oefa/`](fixtures/oefa/):
+Requiere **Node ≥ 20**. No hay servicios que levantar ni credenciales que configurar.
 
 ```bash
-bash scripts/capture-oefa.sh     # regenera los fixtures contra el sitio vivo
-bash scripts/check-access.sh     # diagnóstico de acceso al Poder Judicial
-```
-
-Stack verificado: Mojarra (JSF 2.x, prefijo `javax.faces.*`) + PrimeFaces 6.0,
-sobre un dataset de 1.753 registros en 176 páginas.
-
-**Hallazgo con consecuencias de arquitectura:** la descarga de un PDF exige un
-`ViewState` alineado con la página donde vive la fila. Verificado con un
-experimento controlado —misma sesión, misma fila, mismo conjunto de campos—
-variando solo el origen del token: con el de la página 2 el servidor devuelve
-`200` y la página re-renderizada; con el de la página 1, el PDF. Esto descarta el
-pipeline desacoplado «recolectar todo el metadata primero, descargar después».
-
-Otros dos puntos que cuestan tiempo si se descubren tarde:
-
-- El `ViewState` vuelve en el `partial-response` con id
-  `j_id1:javax.faces.ViewState:0`, no `javax.faces.ViewState`. Buscarlo por id
-  exacto devuelve `undefined` contra toda respuesta real, y el síntoma se
-  confunde con un bloqueo del sitio.
-- Sin la cookie `JSESSIONID` la búsqueda funciona igual, pero la paginación
-  devuelve `200` con la tabla vacía. No hay excepción: parece que el selector
-  dejó de matchear.
-
-El detalle completo, incluidos los modos de falla y lo que los fixtures
-demuestran, está en [`fixtures/oefa/README.md`](fixtures/oefa/README.md).
-
-**Limitación conocida:** el reversing se hizo con el formulario vacío. Los cuatro
-filtros del portal se reenvían vacíos porque JSF exige el submit completo del
-form, pero la búsqueda con valores no está reversada y **el adapter no soporta
-filtros**. La interfaz de fuente se expondrá sin parámetros de filtrado en vez de
-aceptarlos y descartarlos en silencio.
-
-### Bloque 2 — Cliente HTTP ✅
-
-La capa de transporte: sesión con cookie jar, token bucket con AIMD, política de
-reintentos y circuit breaker.
-
-```bash
-npm install
-npm test              # 70 tests, sin red, ~0,4 s
+npm ci
+npm test                        # 546 tests, sin red, ~2,5 s
 npm run typecheck
-npm run smoke:oefa    # opt-in: un GET real contra OEFA
 ```
 
-**Esta capa no sabe qué es un `ViewState`.** No menciona JSF, ni OEFA, ni
-jurisprudencia, y [`tests/architecture.test.ts`](tests/architecture.test.ts) lo
-verifica en cada corrida en vez de dejarlo como promesa de este README.
-
-El reparto de estado es lo que decide la forma de la API: **el cookie jar es por
-sesión; el limiter y el breaker son globales.** El jar identifica una sesión JSF;
-la tasa y el breaker protegen al servidor, que es uno solo. N sesiones
-concurrentes se comportan como N navegadores distintos contra un único servidor
-al que entre todas no deben pasarle por encima.
-
-Cuatro decisiones que cuestan tiempo si se descubren tarde:
-
-- **El `acquire()` del limiter va dentro de la función que se reintenta.** Si
-  estuviera afuera, los reintentos saltarían el throttling justo cuando el
-  servidor pidió bajar el ritmo, y el 429 se auto-perpetuaría.
-- **Un 403 aborta la corrida en vez de reintentarse.** Es la lección directa del
-  diagnóstico de acceso: el 403 del Poder Judicial resultó ser una regla de
-  política del WAF, no una condición transitoria. Insistir no lo cura, y sí es la
-  vía más corta para que un throttling temporal escale a un ban de IP.
-- **Con `responseType: 'stream'` un 429 también trae cuerpo.** Si no se destruye,
-  el socket queda colgado; unos pocos reintentos agotan el pool y los requests se
-  cuelgan sin timeout, con un síntoma que no se parece en nada a la causa.
-- **Todo camino de error tiene que avisarle al circuit breaker, sin excepción.**
-  El del `UnexpectedStatusError` no lo hacía. Un 404 que cayera justo sobre la
-  sonda del `half-open` dejaba la sonda «en vuelo» para siempre: el circuito
-  rechazaba todo request posterior —de todas las sesiones, porque el breaker es
-  global— y ningún cooldown lo curaba. La política vive ahora en el tipo
-  (`degradaServidor`, abstracto en `TransportError`) y el reporte en un único
-  punto de salida: olvidarse dejó de compilar.
-
-El smoke contra OEFA queda **fuera de `npm test`** a propósito: la suite no debe
-depender de la red ni golpear el sitio en cada corrida. Comprueba tres cosas y
-ninguna más — 200, `JSESSIONID` en el jar, y que el cuerpo contenga
-`javax.faces.ViewState` como subcadena. Extraer y rotar ese token es del bloque 3.
-
-Los logs redactan el `;jsessionid=` que el sitio reescribe dentro de las URLs (se
-ve en el `<form action>` de `fixtures/oefa/01-bootstrap.html`). El bloque 1 ya
-tuvo que resolverlo para los fixtures; los logs merecen el mismo cuidado, y más
-todavía porque suelen terminar en sistemas de terceros:
+Contra el sitio de desarrollo, que tiene acceso abierto:
 
 ```bash
-LOG_LEVEL=debug npm run smoke:oefa 2>&1 | grep -c 'jsessionid=[A-Za-z0-9]'
+npm run scrape -- --hasta 3            # tres páginas a data/oefa.jsonl
+npm run download -- --max-descargas 2  # dos PDFs a data/oefa/ — pesan ~9 MB cada uno
+npm run validate                       # sanity checks sobre lo escrito, sin red
 ```
 
-#### Librerías: lo instalado y lo descartado
+`scrape` es reanudable e idempotente: repetirlo completa lo que falte sin duplicar registros
+ni volver a pedir páginas ya leídas. Sin `--hasta` recorre el dataset completo, 176 páginas.
 
-El enunciado sugiere `typescript`, `ts-node`, `axios` y `cheerio`. Se conservan
-`axios` y `cheerio`; `ts-node` se reemplaza por `tsx`, que cumple el mismo rol sin
-la fricción de ESM. Lo agregado:
+Todos los comandos aceptan `--fuente oefa|pj` y `--help`. La
+[referencia completa](#referencia) está más abajo.
 
-| Paquete | Por qué |
+## El problema: un sitio sin URLs
+
+No existe `?page=2`. El portal corre **JSF/Mojarra**, donde el estado de la vista vive en el
+servidor y cada interacción es un POST que lleva un token —el `ViewState`— identificando
+contra qué versión del árbol de componentes se emite el evento. Replicarlo sin navegador es
+el núcleo del desafío.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as scraper
+    participant P as portal JSF
+
+    S->>P: GET de la vista de búsqueda
+    P-->>S: Set-Cookie JSESSIONID · ViewState A
+    S->>P: POST búsqueda (ViewState A)
+    P-->>S: partial-response · filas de la pág. 1 · ViewState B
+    S->>P: POST paginación _first=10 (ViewState B)
+    P-->>S: partial-response · filas de la pág. 2 · ViewState C
+    rect rgb(250, 235, 235)
+    S->>P: POST descarga de una fila de la pág. 1, con ViewState C
+    P-->>S: 200 text/html — la página re-renderizada, sin PDF
+    end
+    rect rgb(235, 245, 235)
+    S->>P: POST descarga de la misma fila, con ViewState B
+    P-->>S: 200 application/octet-stream — %PDF-1.4
+    end
+```
+
+Los dos últimos pares no son un adorno: son un experimento controlado —misma sesión, misma
+fila, mismos campos, variando solo el origen del token— y su resultado ordena la
+arquitectura entera. **El `ViewState` de la descarga tiene que estar alineado con la página
+donde vive la fila**, porque la fila se referencia por índice dentro del árbol de
+componentes y ese índice solo significa lo correcto en el estado que corresponde.
+
+La consecuencia es que **no se puede recolectar todo el metadata primero y descargar
+después**: el downloader tiene que repaginar hasta la página de cada fila. Es lo que hace
+`npm run download`, y por eso cada entrada de la cola de fallos anota su página.
+
+Cuatro características más del protocolo, con lo que cada una obliga a hacer:
+
+| Característica | Consecuencia |
 |---|---|
-| `tough-cookie` + `axios-cookiejar-support` | Axios **no tiene** cookie jar. Sin `JSESSIONID` persistente la paginación devuelve `200` con la tabla vacía. El wrapper además captura `Set-Cookie` emitidos **dentro** de cadenas de redirección, que un interceptor casero no ve porque axios las sigue internamente. |
-| `zod` | Valida el entorno al arrancar. Un `HTTP_RPS=cinco` sin validar degrada a `setTimeout(NaN)` y cuelga el scraper sin decir por qué. |
-| `pino` | Logging estructurado con redacción de identificadores de sesión. |
-| `https-proxy-agent` | Proxy por variable de entorno. **No ejercitado contra ningún proxy real**: no se contrató ninguno para esta entrega, y se declara así en vez de presentarse como funcionalidad probada. |
+| Estado por sesión en el servidor | Cookie `JSESSIONID` obligatoria y persistente. Sin ella la paginación devuelve `200` con la tabla vacía — no lanza, no avisa |
+| Token rotativo | Una máquina de estados con un token vigente, actualizado en cada respuesta y en ningún otro lugar |
+| Respuestas AJAX en XML | El HTML de las filas viaja dentro de bloques `CDATA`: dos pasadas de parsing, no una |
+| Ids de componente autogenerados | `j_idt158` cambia entre deploys. Prohibido hardcodear: se descubren leyendo la página |
 
-Lo que **no** se instaló importa igual:
+## Cómo se descubrió el protocolo
 
-| Descartada | Razón |
+En orden, porque el orden es la parte que se puede reusar.
+
+**1. El primer `curl` al sitio objetivo devolvió `403`.** Antes de asumir «es anti-bot y hace
+falta un navegador», se hizo un diagnóstico por capas: DNS (`*.radwarecloud.net` — hay un WAF
+adelante), TCP (conecta), TLS (1.3 completo, `Verify return code: 0`), y recién ahí HTTP. En
+la capa de aplicación se probaron once headers de Chrome, `--http1.1`, un UA de Googlebot,
+tres paths distintos y la raíz del host: `403` en todos.
+
+**La prueba decisiva fue `curl-impersonate`.** Replica el Client Hello de Chrome cifrado por
+cifrado, el `SETTINGS` frame de HTTP/2 y el orden de los headers: su huella JA3/JA4 es
+indistinguible de un Chrome real. Recibir el mismo `403` con esa huella **descarta el
+fingerprinting de cliente**. El WAF no evalúa *cómo* se conecta el cliente sino *desde
+dónde*. Y `www.pj.gob.pe`, en el mismo `/24` de Radware, devuelve `302`: es una regla de la
+aplicación protegida, no una política de red contra Chile.
+
+Cinco minutos de diagnóstico que evitaron invertir en soluciones anti-bot para un problema
+que no era anti-bot. La secuencia está en [`scripts/check-access.sh`](scripts/check-access.sh),
+reutilizable contra cualquier fuente nueva.
+
+**2. Separar el problema de acceso del problema de protocolo.** El 80 % del trabajo técnico
+—`ViewState`, partial-response, paginación, descargas, rate limiting— es el mismo y no
+requiere IP peruana. Bloquearse esperando resolver el acceso antes de empezar a programar es
+el error de secuenciación más caro disponible. Se buscó un portal con el mismo framework y
+acceso abierto: `publico.oefa.gob.pe`.
+
+**3. Replicar tres requests a mano antes de escribir una línea de código.** El GET inicial,
+un POST de paginación y una descarga de PDF, con `curl`, hasta obtener respuestas idénticas
+a las del navegador. Quedaron como fixtures versionados y como script reproducible:
+
+```bash
+bash scripts/capture-oefa.sh    # regenera los 8 fixtures contra el sitio vivo
+```
+
+Escribir el código después de eso convierte el reversing en traducción. Escribirlo antes
+convierte cada bug en tres hipótesis simultáneas.
+
+**4. Lo que la evidencia corrigió.** Cuatro supuestos razonables que el sitio refutó:
+
+| Se asumía | Lo verificado |
 |---|---|
-| `bottleneck`, `p-limit` | El token bucket con AIMD *es* el criterio evaluado «manejo de 429». Ninguna implementa AIMD; delegarlo escondería justamente la respuesta. |
-| `axios-retry`, `p-retry` | No pueden expresar el acople con el limiter, la prioridad de `Retry-After`, ni que un 403 aborte en vez de reintentar. |
-| `nock`, `msw` | Interceptan a nivel de módulo: no reproducen un socket cortado (`ECONNRESET`) ni ejercitan el jar sobre el camino real de axios. El servidor de pruebas es un `node:http` efímero en puerto 0. |
-| `commander`, `yargs` | `util.parseArgs` es nativo desde Node 18.3. |
+| State saving server-side, con LRU de vistas | En OEFA es **client-side**: el token es un blob base64 de ~1,5 KB |
+| Un solo `ViewState` vigente; el anterior muere al usarse | **Reutilizable** dentro de la sesión |
+| El token vuelve con id `javax.faces.ViewState` | Vuelve como **`j_id1:javax.faces.ViewState:0`** — buscar por id exacto devuelve `undefined` contra toda respuesta real |
+| La sesión caída llega como `ViewExpiredException` | Llega como **`<redirect>`** en 113 bytes, `HTTP 200`, sin `<error>` y sin que esa cadena aparezca en ninguna parte |
 
-### Bloque 3 — Capa JSF ✅
+Los cuatro tienen el mismo síntoma cuando no se ven: cero filas, sin excepción, y la
+sensación de que «el selector dejó de matchear». Es el modo de falla que ordena todo el
+diseño de aserciones de este repositorio.
 
-El protocolo, ya no como fixtures sino como código: bootstrap, evento AJAX,
-submit no-ajax estilo `mojarra.jsfcljs`, y el `ViewState` rotando con un único
-token vigente por sesión.
+**5. Lo que solo aparece corriendo el dataset completo.** Los ocho fixtures cubren el
+protocolo; los defectos de contenido aparecieron en las 1.753 filas. La corrida se detuvo en
+el registro 37 (el portal publica resoluciones «Información confidencial», sin número y sin
+enlace: registros legítimos sin documento) y después en el 277 (dos filas comparten
+expediente, resolución **y documento**, y se distinguen por la unidad fiscalizable). Un
+identificador que a veces falta y a veces se repite no es una clave, así que el registro pasó
+a llevar un `id` derivado del contenido. Más tarde, el validador encontró 29 resoluciones sin
+año por un regex demasiado estricto.
 
-```bash
-npm test              # la suite completa, sin red
-npm run smoke:jsf     # opt-in: bootstrap → búsqueda → página 2 contra OEFA
-```
+Las tres las encontraron aserciones duras. Escritas flojas desde el principio habrían costado
+un dataset con registros faltantes y nadie enterándose.
 
-El smoke recorre el protocolo completo contra el sitio real y comprueba seis
-cosas: cookie propagada, `ViewState` presente y rotado en cada respuesta,
-`rowCount` 1.753, diez filas por página y páginas sin solapamiento.
-
-**Esta capa no sabe qué es un expediente.** Habla de `ViewState`, de Mojarra y de
-PrimeFaces —para eso existe— pero no de jurisprudencia ni de resoluciones
-ambientales, y [`tests/architecture.test.ts`](tests/architecture.test.ts) lo
-verifica junto con algo más fuerte: **`cheerio` es la única dependencia de
-runtime que `src/jsf/` tiene fuera de sí misma.** Todo lo demás —`Session`,
-`Logger`, `Metrics`— entra como `import type` y llega inyectado, así que la capa
-no puede construirse una sesión por su cuenta ni saltarse el rate limiter.
-
-#### Tres cosas que la implementación descubrió
-
-**La sesión caída no se anuncia como tal.** Se capturó un fixture nuevo
-—[`06-view-expired.xml`](fixtures/oefa/06-view-expired.xml), un POST con el token
-corrompido— y la respuesta son 113 bytes: `200`, `text/xml`, un `<redirect>` a la
-página de inicio. **Sin `<error>`, sin `<error-name>`, y sin que la cadena
-`ViewExpiredException` aparezca en ninguna parte.** La forma canónica de JSF es
-la otra, así que un parser escrito contra la spec habría recibido acá un
-`partial-response` válido con cero `<update>`, sin lanzar nada: cero filas, y el
-síntoma de siempre — «el selector dejó de matchear». Las dos señales se tratan
-como la misma condición.
-
-**Un `<tr>` suelto se descarta en silencio.** La respuesta de paginación no trae
-una tabla: trae una tira de `<tr data-ri="10">` pelados. El algoritmo de parsing
-de HTML descarta un `<tr>` fuera de contexto de tabla, así que cargar ese
-fragmento devuelve **cero filas** — el mismo síntoma que la sesión perdida, esta
-vez causado por nosotros. Envuelto en `<table><tbody>` devuelve las diez. Es un
-test, no un comentario.
-
-**`04-download-a.html` empieza con `<?xml`.** Es una página HTML completa —el
-resultado de pedir un PDF con el `ViewState` desalineado— pero sus primeros
-bytes son `<?xml version='1.0' encoding='UTF-8' ?>` y recién después viene el
-`<!DOCTYPE html>`. Detectar un `partial-response` por cómo arranca el cuerpo,
-que es lo natural, clasifica mal justo el fixture que representa el peor caso.
-
-#### Decisiones que definen la capa
-
-- **Los errores de protocolo no heredan de `TransportError`.** No es estético:
-  `withRetry()` reintenta todo lo que herede de ahí, y un `ViewExpiredError`
-  reintentado cinco veces manda cinco veces el mismo token muerto. El arreglo de
-  una vista caída no es «mandalo de nuevo» sino «reconstruí la vista y replicá el
-  estado de aplicación», y eso no cabe en un `withRetry`.
-- **El `;jsessionid=` se saca de las URLs**, y la cookie queda como única fuente
-  de verdad de la sesión. Es seguro **porque** el bootstrap asevera que la cookie
-  existe: si el sitio propagara la sesión solo por reescritura de URL, falla ahí
-  y no trescientas páginas después con la tabla vacía.
-- **`recover()` no bota la cookie**, aunque §5.1 lo describiera así. Los
-  resultados viven en un bean de sesión: perderla cambia un error ruidoso por
-  cero filas silenciosas. Y es innecesario — si la sesión murió de verdad, el GET
-  trae un `Set-Cookie` nuevo y el jar la reemplaza solo.
-- **La tabla vacía se devuelve como dato, no como excepción.** Esta capa no puede
-  distinguir «se perdió la sesión» de «la búsqueda no tuvo resultados»: para eso
-  hay que saber que el total esperado era 1.753. Ese contexto vive en `sources/`,
-  y ahí van las aserciones duras.
-
-### Bloque 4 — Adapter, parsers y persistencia ✅
-
-El protocolo convertido en datos: bootstrap → búsqueda → una página por evento,
-con las filas parseadas, validadas por esquema y escritas en JSONL.
+**6. El sitio bloqueado tenía markup disponible en otra parte.** Durante seis bloques se dio
+por hecho que del Poder Judicial no se podía obtener markup sin acceso a su red. Es falso: el
+archivo web sirve los snapshots desde su propio dominio, y el `403` es una regla del WAF del
+portal que no alcanza a un tercero que ya capturó las páginas.
 
 ```bash
-npm run scrape -- --hasta 3      # tres páginas a data/oefa.jsonl
-npm run scrape                   # el dataset completo (176 páginas, ~6 min)
-npm run smoke:source             # opt-in: el adapter contra el sitio real
+bash scripts/capture-pj.sh      # tres snapshots reales a fixtures/pj/
 ```
 
-**Corrida real, con el output commiteado en [`data/oefa.jsonl`](data/oefa.jsonl):**
-las 176 páginas, 1.753 filas recorridas, 177 requests, **cero `429` y cero
-reintentos** a 1 req/s. En el archivo quedan **1.749 registros** — la diferencia
-son cuatro filas que el propio portal publica repetidas, byte por byte, en la
-misma página (una de ellas tres veces); no aportan información y se deduplican al
-persistir. 131 registros no tienen documento asociado. La suite son **285 tests
-sin red**, incluidos los que ejercitan los dos hallazgos de abajo contra fixtures
-reales.
+Ese markup refutó cuatro supuestos sobre los que el adapter se iba a escribir —entre ellos
+que el portal corriera PrimeFaces— y destapó un defecto en código ya escrito y ya testeado.
+La lección de método es incómoda: **el diagnóstico del `403` fue tan concluyente que dejó de
+buscarse.** Un diagnóstico correcto es una respuesta, no una clausura.
 
-La corrida es **reanudable e idempotente**: antes de arrancar lee las identidades
-que el archivo ya tiene y no las reescribe. Repetir el comando completa lo que
-falte; correrlo dos veces sobre el mismo rango escribe cero líneas. `Ctrl-C`
-corta en el borde de una página, nunca en medio de una escritura.
+El detalle de cada hito, con los fixtures que lo demuestran, está en la
+[bitácora](docs/bitacora.md), en [`fixtures/oefa/README.md`](fixtures/oefa/README.md) y en
+[`fixtures/pj/README.md`](fixtures/pj/README.md).
 
-#### Lo que el sitio enseñó a la fuerza
+## Dos sitios, y qué se corrió contra cada uno
 
-Las dos correcciones de diseño de este bloque no salieron de leer el portal con
-cuidado. Salieron de correrlo entero contra aserciones deliberadamente estrictas
-y ver dónde se rompían. **Las dos son la misma equivocación vista desde lados
-opuestos: usar el identificador del PDF como si fuera la clave del registro.**
-
-**Corrida 1, registro 37 de 1.753 — hay filas sin documento.** OEFA publica
-algunas resoluciones como «Información confidencial»: sin número y sin enlace de
-descarga. Son registros legítimos —expediente, administrado, unidad fiscalizable
-y sector están completos— a los que el organismo decidió no publicarles el PDF.
-La aserción «toda fila tiene uuid» los daba por rotos.
-
-**Corrida 2, registro 277 — y hay documentos compartidos.** Las filas 277 y 278
-tienen el mismo expediente, el mismo administrado, la misma resolución y el mismo
-PDF; se distinguen por la unidad fiscalizable. Una resolución que alcanza a dos
-unidades es un registro por unidad y un solo documento.
-
-Un identificador que a veces falta y a veces se repite no es una clave. El
-registro lleva ahora un `id` derivado de su contenido y un `documentoUuid`
-opcional, y el parser distingue dos condiciones que antes eran una sola:
-
-| Condición | Significado | Política |
+| | Objetivo | Desarrollo |
 |---|---|---|
-| La celda no trae `<a onclick>` | El sitio no publicó el documento | Dato: se persiste y se cuenta |
-| Hay `<a onclick>` y no se deja leer | Cambió la forma del `onclick` | Drift: se detiene la corrida |
+| Host | `jurisprudencia.pj.gob.pe` | `publico.oefa.gob.pe` |
+| Acceso | `403` desde Chile — Radware Cloud WAF | abierto |
+| Framework | Mojarra (JSF 2.x) | Mojarra (JSF 2.x) |
+| Componentes | **RichFaces 4.2.2.Final** | **PrimeFaces 6.0** |
+| State saving | **server-side** (handle de dos longs) | **client-side** (blob base64 de ~1,5 KB) |
+| Búsqueda | POST **no-ajax**: devuelve la página entera | evento AJAX: devuelve un `partial-response` |
+| Estado del adapter | escrito y testeado, **no ejercitado contra su fuente** | ✅ dataset completo, descargas y validación |
 
-Ambos casos quedaron capturados como fixtures
-([`07`](fixtures/oefa/07-page4-confidencial.xml),
-[`08`](fixtures/oefa/08-page28-uuid-repetida.xml)) con tests que los ejercitan sin
-red. Vale la pena decir qué se llevó cada opción: aserciones estrictas costaron
-dos corridas y un rediseño; escritas flojas desde el principio habrían costado un
-dataset con registros faltantes y nadie enterándose.
+Lo común es **Mojarra**, y es lo que transfirió: cinco de los seis archivos de `src/jsf/` se
+reusaron enteros contra el segundo portal. El que no —`datatable.ts`, que es de PrimeFaces—
+estaba aislado en un solo archivo desde el bloque 3, con un comentario que predecía
+exactamente esto. Se tiró.
 
-#### Detección de drift (§6.4)
+**Decisión de alcance, declarada:** no se contrató VPN ni proxy residencial para esta
+entrega. El diagnóstico de acceso al Poder Judicial **queda abierto** —se sabe que el
+discriminante es un atributo de la IP de origen, no cuál de los tres— y el adapter del PJ no
+se ejercita contra su fuente. No se simula cobertura que no se logró.
 
-Nueve condiciones detienen la corrida, cada una con su tipo, su contexto y un
-test que la ve saltar —una aserción que nunca se vio fallar es una aserción que
-no se sabe si funciona:
-
-| Condición | Qué detecta |
-|---|---|
-| `sin-filas` | La sesión perdida: sin cookie la paginación devuelve `200` con la tabla vacía |
-| `sin-total` | La búsqueda no reportó `rowCount`: sin total no hay última página |
-| `pagina-incompleta` | Llegaron menos filas de las que corresponden a ese offset |
-| `indices-desalineados` | El servidor ignoró el `dt_first` y re-renderizó otra página |
-| `numeracion` | Las celdas se corrieron dentro de la fila |
-| `columnas` | Cambió la estructura de la tabla |
-| `sin-uuid` | El `onclick` cambió de forma |
-| `solapamiento` | La paginación no avanzó: todas las filas ya se habían leído |
-| `total-inestable` | El total cambió a mitad de recorrido, invalidando los offsets |
-| `page-size` | El widget declara otro tamaño de página que el configurado |
-
-Los rótulos de las columnas, en cambio, **avisan y no detienen**: cambian por una
-tilde o un renombre editorial sin que cambie nada más, y una aserción que tumba
-la corrida por cosmética es una aserción que alguien va a desactivar.
-
-Dos de estos chequeos hacen falta juntos y ninguno reemplaza al otro.
-`indices-desalineados` ve al servidor que ignoró el offset; `solapamiento` ve al
-que respetó los `data-ri` pero sirvió el contenido de otra página. Y el
-solapamiento se compara contra lo visto **en esta corrida**, nunca contra el
-archivo: en una reanudación todo lo del archivo está legítimamente repetido.
-
-#### Decisiones que definen la capa
-
-- **El `ViewState` de cada página viaja con la página, no con el registro.**
-  §5.4 probó que la descarga exige un token alineado con la página donde vive la
-  fila. Pero es un blob de 1,5 KB y un identificador de sesión: multiplicado por
-  1.753 registros infla el JSONL diez veces para guardar algo que no sirve en la
-  corrida siguiente. Vive en memoria, en la `Pagina`.
-- **La `JsfView` llega inyectada.** `src/sources/` no importa nada de
-  `src/http/` —ni siquiera como tipo—, así que el adapter no puede construirse
-  una sesión propia ni saltarse el rate limiter. Quien cablea es `cli/`, y
-  [`tests/architecture.test.ts`](tests/architecture.test.ts) lo verifica.
-- **La recuperación rehace la búsqueda, y después verifica.** `recover()` deja la
-  vista lista y el bean de resultados vacío; volver a paginar sin volver a buscar
-  devuelve la tabla vacía. El adapter es quien sabe qué se estaba buscando, así
-  que la recuperación vive acá. Y el repaginado no es ciego: si el bean quedó en
-  la página 1, `indices-desalineados` lo denuncia. Tope de un intento por offset,
-  para que una vista que expira siempre en la misma página no cicle.
-- **El writer del JSONL es síncrono.** Un `WriteStream` bufferea, y con buffer
-  pendiente un `process.exit()` pierde líneas ya reportadas como escritas. A un
-  request por segundo el costo de `writeSync` es ruido frente a la latencia de
-  red, y a cambio «la llamada volvió» significa «los bytes están en el kernel».
-  Un `fsync` por página, no por registro.
-- **Al abrir se repara la cola truncada.** Una caída deja media línea al final;
-  el siguiente append la concatenaría con el registro nuevo. Se trunca al último
-  salto de línea y se reporta cuántos bytes se descartaron. El lector, en cambio,
-  es estricto y lanza: para `npm run validate` una cola truncada *es* un
-  hallazgo, no algo que haya que reparar en silencio.
-
-### Bloque 5 — Descarga de documentos, cola de fallos y reanudación ✅
-
-Los PDFs, con validación de integridad, cola de reintentos y checkpoint por
-página.
+Lo que sí se entrega es el cierre convertido en dos comandos, para quien tenga salida
+peruana:
 
 ```bash
-npm run download -- --hasta 3      # tres páginas de documentos a data/oefa/
-npm run download                   # todo lo que falte, retomando el checkpoint
-npm run download -- --dry-run      # qué bajaría, sin bajar
-npm run retry-failed               # reintenta lo que quedó en la cola
-npm run smoke:download             # opt-in: el experimento de §5.4 contra el sitio real
+bash scripts/check-access.sh    # IP, país, ASN, el objetivo, el control del mismo /24, y la matriz de decisión
+npm run smoke:pj                # ejercita el adapter entero contra el sitio vivo
 ```
 
-**Corrida real:** 3 páginas, **30 documentos, 232,6 MB, 34 requests, cero `429` y
-cero reintentos**, en 48 segundos a 1 req/s. Los 30 archivos empiezan con `%PDF-`.
-El manifiesto queda commiteado en
-[`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl); **los binarios no se
-versionan** —entre 0,5 y 18,3 MB cada uno— y esto se dice con todas las letras
-en vez de dejar entender que están. Repetir el comando sale en cero requests. La
-suite son **382 tests sin red**.
+`smoke:pj` separa las tres cosas que se confunden y tienen arreglos distintos: **bloqueo**
+(`403` del WAF — no dice nada del adapter), **supuesto refutado** (llegamos y el markup no
+calza, que es el desenlace más informativo) y **fallo de protocolo**. Desde Chile hoy
+devuelve `2` y dice «BLOQUEADO», que es la respuesta correcta.
 
-#### La restricción que ordena el bloque
+## Arquitectura
 
-`fixtures/oefa/04` y `05` lo dejaron fijado en el bloque 1: **la descarga exige un
-`ViewState` alineado con la página donde vive la fila.** `npm run smoke:download`
-lo vuelve a comprobar contra el sitio vivo, con el mismo código que corre en
-producción y variando solo de qué página viene el token:
+```mermaid
+flowchart TD
+    cli["<b>cli/</b><br/>scrape · download · retry-failed · validate"]
+    sources["<b>sources/</b><br/>adapters OEFA y PJ · parsers de fila · aserciones"]
+    jsf["<b>jsf/</b><br/>ViewState · partial-response · forms · comandos"]
+    http["<b>http/</b><br/>sesión · cookie jar · token bucket AIMD · retry · breaker"]
+    store["<b>store/</b><br/>JSONL · archivos · cola de fallos · checkpoint"]
+    validate["<b>validate/</b><br/>sanity checks, sin I/O"]
+    obs["<b>obs/</b><br/>logging · métricas"]
 
-```
-token de la página 2 → 200 text/html;charset=UTF-8          ← la página re-renderizada
-token de la página 1 → 200 application/octet-stream "%PDF-" ← el documento
-```
-
-De ahí sale todo lo demás. No hay pipeline «recolectar todo y descargar después»:
-el downloader **recorre y baja intercalado**, y `retry-failed` vuelve a navegar
-hasta la página de cada pendiente en lugar de reproducir un request guardado —por
-eso cada entrada de la cola lleva anotada su página, y por eso recuperar tres
-documentos cuesta el rango que los contiene y no el dataset entero—.
-
-#### Un comando, un producto
-
-`scrape` escribe los registros; `download` escribe el manifiesto, y los dos
-archivos se unen por `id`:
-
-```jsonc
-{"id":"e41f4370…","documentoUuid":"153a6d2a-…","pagina":1,"indice":0,
- "archivo":"153a6d2a-…_264-2012-oefa-tfa.pdf","bytes":9377728,"sha256":"3c175af6…",
- "nombreServidor":"attachment;filename=\"RTFA N° 264-2012.pdf\""}
+    cli --> sources
+    cli --> store
+    cli --> validate
+    sources --> jsf
+    jsf --> http
+    obs -.-> cli
+    obs -.-> sources
+    obs -.-> http
 ```
 
-El nombre sale del **identificador del documento** y no del registro, y es la
-consecuencia directa del hallazgo del bloque 4: dos registros pueden compartir un
-PDF (una resolución que alcanza a dos unidades fiscalizables), así que el archivo
-se baja una vez y las dos líneas del manifiesto apuntan al mismo. El
-`content-disposition` se guarda crudo pero no se usa para nombrar: viene en
-ISO-8859-1 sin RFC 5987, y leerlo como UTF-8 produce mojibake.
+El criterio: **la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones ambientales,
+y la capa `sources/` no sabe nada de reintentos ni de cookies.** Las flechas que no están son
+tan importantes como las que sí: `http/` no menciona `ViewState`, `jsf/` no importa
+`sources/`, y `validate/` no hace I/O —recibe los datos y devuelve hallazgos—.
 
-#### Que nunca quede un `.pdf` que es una página web
+Eso no es una promesa de este README: [`tests/architecture.test.ts`](tests/architecture.test.ts)
+lo verifica en cada corrida, ignorando comentarios —citar el dominio para explicar *por qué*
+es legítimo; depender de él, no—. Un criterio de diseño que solo vive en un README deja de ser
+cierto en el tercer apuro.
 
-Es el peor artefacto posible del bloque, porque no falla: queda en disco, la
-corrida siguiente lo da por bajado y el diagnóstico llega al abrirlo. El cuerpo se
-escribe a un `.parcial`, se validan los primeros bytes contra `%PDF-` y el tamaño
-mínimo, y recién entonces aparece el nombre final con un `rename` atómico. Si algo
-no da, se destruye el stream —un cuerpo sin drenar cuelga el socket— y se borra el
-temporal. **El destino nunca existe a medias.**
+Y la afirmación se puso a prueba desde afuera, que es lo que un test de grep no puede hacer:
+contra un segundo portal con **otra librería de componentes y otro modelo de state saving**,
+`view.ts`, `commands.ts`, `form.ts`, `view-state.ts` y `partial-response.ts` transfirieron
+enteros; `datatable.ts` no transfirió nada. Cinco de seis, y el que no transfirió estaba
+aislado en un solo archivo a propósito.
 
-#### Qué detiene la corrida y qué solo se anota
+`obs/` no estaba en el plan original. Se agregó porque el logging y las métricas son
+transversales —`sources/` y `store/` también emiten—, así que meterlos dentro de `http/`
+habría obligado a sacarlos después.
 
-| Condición | Qué pasa |
+## Referencia
+
+### Comandos
+
+| Comando | Red | Qué hace |
+|---|---|---|
+| `npm test` | no | La suite completa: 546 tests, ~2,5 s |
+| `npm run typecheck` | no | `tsc --noEmit` |
+| `npm run scrape` | sí | Recorre la fuente y escribe el dataset JSONL |
+| `npm run download` | sí | Recorre y baja los documentos intercalado, con manifiesto y cola de fallos |
+| `npm run retry-failed` | sí | Consume la cola: re-navega hasta la página de cada registro |
+| `npm run validate` | opcional | Sanity checks sobre lo escrito; `--contra-el-sitio` agrega 2 requests |
+| `npm run smoke:oefa` | sí | Transporte: `200`, `JSESSIONID` en el jar, token en el cuerpo |
+| `npm run smoke:jsf` | sí | Protocolo: bootstrap → búsqueda → página 2, con el token rotando |
+| `npm run smoke:source` | sí | El adapter contra las dos condiciones que los fixtures no cubren |
+| `npm run smoke:download` | sí | La descarga, y el experimento del `ViewState` desalineado |
+| `npm run smoke:pj` | sí | El adapter del Poder Judicial contra su sitio |
+| `bash scripts/capture-oefa.sh` | sí | Regenera los fixtures de OEFA |
+| `bash scripts/capture-pj.sh` | sí | Regenera los fixtures del PJ desde el archivo web |
+| `bash scripts/check-access.sh` | sí | Diagnóstico de acceso al portal objetivo |
+
+**Los cinco smokes quedan fuera de `npm test` a propósito.** La suite no debe depender de la
+red ni golpear un sitio real en cada push: sería exactamente lo que el rate limiter existe
+para evitar. CI corre `typecheck` + `test` contra Node 20, 22 y 24.
+
+### Flags
+
+Los cuatro CLIs aceptan `--fuente oefa|pj`, `--help` y, salvo `validate`, `--dry-run`.
+Las rutas por defecto se derivan del nombre de la fuente.
+
+| CLI | Flags propios |
 |---|---|
-| `403` | **Aborta.** Posible ban de IP; insistir es la vía corta al bloqueo (§5.6) |
-| Circuito abierto tras agotar reintentos | **Aborta.** Degradación sostenida |
-| `429`, `5xx`, red, tras agotar reintentos | A la cola; la corrida sigue |
-| Cuerpo que no es el documento | A la cola **y** al contador de inválidas |
-| 3 inválidas seguidas | **Aborta** con drift `descarga-no-pdf` |
-| Fila sin documento publicado | Se cuenta y se sigue: es un dato del sitio |
-| Fallo de disco | **Aborta.** No se arregla reintentando ese documento |
+| `scrape` | `--desde <n>` · `--hasta <n>` · `--salida <ruta>` · `--checkpoint <ruta>` · `--max-recuperaciones <n>` · `--reiniciar` |
+| `download` | `--desde` · `--hasta` · `--destino <dir>` · `--manifiesto <ruta>` · `--dlq <ruta>` · `--checkpoint <ruta>` · `--max-descargas <n>` · `--reiniciar` |
+| `retry-failed` | `--dlq` · `--destino` · `--manifiesto` · `--max-intentos <n>` |
+| `validate` | `--dataset <ruta>` · `--manifiesto` · `--dlq` · `--descargas <dir>` · `--checkpoint` · `--page-size <n>` · `--total <n>` · `--hash` · `--contra-el-sitio` |
 
-El corte por inválidas seguidas es la red de seguridad que faltaba: **una sesión
-caída durante la descarga no lanza**, devuelve la página de inicio con `200`. Sin
-ese contador, la corrida sigue mil setecientas filas produciendo cero PDFs y una
-cola que nadie va a poder consumir.
+### Variables de entorno
 
-#### Reanudación por página
+Se validan con `zod` al arrancar ([`src/config.ts`](src/config.ts)) en vez de leerse sueltas:
+un `HTTP_RPS=cinco` sin validar degrada el limiter a un `setTimeout(NaN)` y cuelga el scraper
+sin decir por qué. Fallar al arrancar cuesta un segundo; fallar en la página 900, una corrida.
 
-El JSONL ya daba idempotencia por contenido; el checkpoint agrega el **dónde**.
-Sin él, una corrida cortada en la página 150 vuelve a emitir 150 eventos de
-paginación para descubrir que no tiene nada que escribir.
+| Variable | Default | Para qué |
+|---|---|---|
+| `HTTP_RPS` | `1` | Tasa inicial del token bucket |
+| `HTTP_MIN_RPS` / `HTTP_MAX_RPS` | `0.2` / `5` | Piso y techo del ajuste AIMD |
+| `HTTP_BURST` | `2` | Tokens de ráfaga |
+| `HTTP_TIMEOUT_MS` | `30000` | Timeout por request |
+| `HTTP_MAX_RETRY_AFTER_MS` | `120000` | Tope al `Retry-After` del servidor: uno mal calculado —u hostil— colgaría la corrida una hora |
+| `HTTP_USER_AGENT` | el de `capture-oefa.sh` | Cambiarlo introduce una variable no controlada al comparar contra los fixtures |
+| `PROXY_URL` | — | Salida por proxy. **No ejercitado contra ningún proxy real** |
+| `LOG_LEVEL` | `info` | `trace`…`silent` |
+| `LOG_PRETTY` | según TTY | Formato legible en vez de JSON |
 
-- **El total es el invariante.** §5.7 pide guardar «el hash del conjunto de
-  filtros»; sin filtros reversados (§2.5) ese hash sería una constante, así que el
-  papel lo cumple el total declarado por el sitio. Si cambió, el organismo publicó
-  algo, los índices se corrieron y retomar en la página 151 leería filas que no
-  son las que faltaban: el checkpoint se descarta y se recorre de nuevo.
-- **Uno por comando.** `scrape` y `download` avanzan a ritmos distintos sobre la
-  misma fuente; compartir el archivo haría que el atrasado se saltee páginas que
-  nunca leyó. Van separados por defecto y el checkpoint anota qué comando lo
-  escribió, para que un `--checkpoint` mal apuntado falle en vez de arruinar la
-  corrida en silencio.
-- **La página se marca completada solo si se procesó entera.** Un checkpoint
-  escrito a mitad de página se saltearía las filas que faltaban.
-- **Repetir un comando no hace algo más grande.** `--hasta 3` dos veces seguidas
-  no descarga el dataset entero la segunda: sale en cero requests.
+## Los datos
 
-#### Cómo se probó
+Se entregan dos JSONL —no un array JSON: un `[{…}, {…}]` monolítico obliga a mantener todo
+en memoria y a escribir al final, y una caída en el registro 1.700 pierde la corrida entera—.
 
-El portal falso de los tests recuerda con qué offset generó cada token y entrega
-el documento solo si la fila pedida cae en esa ventana; fuera de ella devuelve
-`200` con `text/html`, igual que el sitio real. Sin eso, los tests de descarga
-pasarían con un downloader que manda cualquier token y el fallo se descubriría al
-abrir los archivos. Sobre esa base, 44 tests nuevos cubren el token desalineado,
-el cuerpo que no es un PDF, el que pesa cuatro bytes, el `403` que aborta, el
-`429` que va a la cola, el documento compartido que se baja una sola vez, y el
-ciclo completo fallar → encolar → reintentar → cola vacía.
+**Un registro** de [`data/oefa.jsonl`](data/oefa.jsonl):
 
-Ese ciclo también se ejercitó contra el sitio real: se encoló a mano un documento
-de la página 2, se corrió `npm run retry-failed`, y el comando navegó hasta esa
-página, recuperó el archivo y dejó la cola vacía en 4 requests.
+```json
+{
+  "fuente": "oefa",
+  "id": "e41f437005ce5c0fe1adb1ee",
+  "indice": 0,
+  "pagina": 1,
+  "capturadoEn": "2026-08-15T19:58:24.469Z",
+  "documentoUuid": "153a6d2a-cbed-40ef-b8ef-cd2272b19867",
+  "expediente": "891-08-PRODUCE/DIGSECOVI-Dsvs",
+  "administrados": ["Corporación del Mar S.A.", "Austral Group S.A.A."],
+  "unidadFiscalizable": "Planta Playa Lado Norte Puerto Malabrigo",
+  "sector": "Pesquería",
+  "resolucion": "264-2012-OEFA/TFA",
+  "anioResolucion": 2012
+}
+```
 
-### Bloque 6 — Sanity checks sobre lo entregado ✅
+`id` es un hash del contenido, estable entre corridas. **No es el `documentoUuid`**, y esa
+distinción costó dos corridas completas: hay 131 registros sin documento —el portal los marca
+«Información confidencial»— y hay documentos que alcanzan a más de un registro. Tampoco sirve
+`indice`, que es la posición dentro del resultado y se corre entera en cuanto el organismo
+publica algo nuevo.
 
-Los dos archivos que se entregan, revisados por un comando en vez de por un
-párrafo de este README (§6.3).
+**Una entrada** del manifiesto [`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl):
+
+```json
+{
+  "id": "e41f437005ce5c0fe1adb1ee",
+  "fuente": "oefa",
+  "documentoUuid": "153a6d2a-cbed-40ef-b8ef-cd2272b19867",
+  "pagina": 1,
+  "indice": 0,
+  "archivo": "153a6d2a-cbed-40ef-b8ef-cd2272b19867_264-2012-oefa-tfa.pdf",
+  "bytes": 9377728,
+  "sha256": "3c175af6a0460268345a3ed1eaab69b0acaed0f100993204de444a11eb29ba14",
+  "nombreServidor": "attachment;filename=\"RTFA N° 264-2012.pdf\"",
+  "descargadoEn": "2026-08-14T21:07:42.879Z"
+}
+```
+
+**Los binarios no se versionan** —los 30 PDFs pesan 232,6 MB— pero el manifiesto sí: es la
+evidencia de qué se bajó, cuánto pesaba y con qué hash, y permite re-verificar los archivos
+sin volver a pedirlos. `nombreServidor` se guarda como dato, no se usa: el
+`content-disposition` real trae el filename en ISO-8859-1 (el byte `0xB0` de `N°`), leerlo
+como UTF-8 produce mojibake, y además no garantiza unicidad. El nombre se construye desde
+nuestro propio metadata.
+
+## Cómo se valida
+
+Los sanity checks son un comando, no un párrafo de este README:
 
 ```bash
-npm run validate                                    # dataset + manifiesto, sin red
-npm run validate -- --descargas descargas --hash    # además, los archivos en disco
-npm run validate -- --contra-el-sitio               # opt-in: 2 requests al portal
+npm run validate                        # dataset y manifiesto
+npm run validate -- --hash              # además, re-lee cada archivo y recalcula su sha256
+npm run validate -- --contra-el-sitio   # además, le pregunta el total al portal: 2 requests
 ```
 
-Veinticinco chequeos, veintisiete con `--contra-el-sitio`. Sobre los archivos
-commiteados, con los PDFs al lado y preguntándole el total al portal:
+Sobre los archivos entregados, con los PDFs al lado y preguntándole el total al portal:
 
 ```
 Dataset — data/oefa.jsonl
@@ -516,221 +390,92 @@ Contra el sitio
   0 error(es) · 2 aviso(s) · 25 ok · 0 no evaluable(s)
 ```
 
-La suite son **460 tests sin red**, e incluye uno que corre este mismo informe
-sobre los archivos commiteados y exige cero errores: tener sanity checks y
-haberlos corrido no son lo mismo, y con el test la diferencia deja de depender de
-que alguien se acuerde.
+**El nivel que importa es el cuarto: «no evaluable».** Un chequeo que no pudo correr no es un
+chequeo que pasó. Si la carpeta de descargas no está —y en un clon limpio no está, porque los
+binarios no se versionan— la integridad de los archivos se reporta `–` y nunca `✓`. Un informe
+que dice «los 30 archivos están bien» sin haber abierto uno es peor que no tener informe,
+porque además da confianza.
 
-#### Encontró un defecto en su primera corrida
+Lo mismo con la cobertura: sin un total declarado, el archivo solo prueba una **cota
+inferior**, y una corrida cortada en la última página se ve idéntica a una completa. De ahí
+sale `--contra-el-sitio`.
 
-Que es para lo que existe. El chequeo del año —el «porcentaje de fechas
-parseadas» de §6.3— reportó **29 resoluciones con documento publicado y sin
-año**. El parser exigía `-` o fin de cadena después de las cuatro cifras, y el
-portal también publica `019-2014/TFA-SEP1`, sin el segmento `-OEFA`, y
-`075-2013 -OEFA/TFA`, con un espacio de más. Ninguno de los ocho fixtures tenía
-esas formas; aparecieron recorriendo las 1.753 filas.
+Hay además un test que corre este mismo informe sobre los archivos commiteados y exige cero
+errores: tener sanity checks y haberlos corrido no son lo mismo, y con el test la diferencia
+deja de depender de que alguien se acuerde.
 
-El arreglo es un delimitador más flojo a la derecha con la protección puesta del
-otro lado —`(?!\d)`, para que `-20145` no entregue 2014— y el dataset se
-regeneró completo: mismos 1.749 ids, mismos conteos, 29 registros que ganaron su
-año y ninguno que cambiara de otra cosa. Después del arreglo el invariante quedó
-limpio y verificable de un vistazo: **los 1.618 registros con documento tienen
-año, y los 131 que no lo tienen son exactamente los que el portal marca
-«Información confidencial»**, sin número de resolución y sin PDF.
+> Los 30 PDFs de la corrida del bloque 5 quedaron localmente en `descargas/`, la ruta anterior
+> a que hubiera dos fuentes. Para re-verificarlos: `npm run validate -- --descargas descargas --hash`.
+> Una corrida nueva los escribe en `data/oefa/`, que es el default.
 
-#### Cuatro niveles, y el que importa es «no evaluable»
+## Criterio → evidencia
 
-Un chequeo que no pudo correr no es un chequeo que pasó. Si la carpeta de
-descargas no está —y no está: los binarios no se versionan—, la integridad de los
-archivos se reporta `–` y nunca `✓`. Un informe que dice «los 30 archivos están
-bien» sin haber abierto uno es peor que no tener informe, porque además da
-confianza. Lo mismo con la cobertura: sin un total declarado, el archivo solo
-prueba una **cota inferior**, y una corrida cortada en la última página se ve
-idéntica a una completa.
-
-De ahí sale `--contra-el-sitio`, que cuesta dos requests y contesta el primer
-sanity check de §6.3 sin depender de un checkpoint que `.gitignore` no versiona.
-Pregunta el total y compara las diez filas que el portal muestra hoy contra el
-archivo, que es una afirmación más fuerte: cubre el caso en que el organismo
-publicó algo y todos los índices se corrieron.
-
-| Condición | Nivel |
+| Criterio del enunciado | Dónde está |
 |---|---|
-| Línea ilegible, esquema roto, campo obligatorio vacío | **Error** |
-| Identidad o posición repetida; página que no concuerda con el índice | **Error** |
-| Archivo del manifiesto ausente, de otro tamaño o de otro contenido | **Error** |
-| Huecos de posición por filas que el portal publica repetidas | Aviso |
-| Documento compartido por registros con expedientes distintos | Aviso |
-| Cola de fallos con pendientes | Aviso |
-| Cualquier chequeo que no se pudo correr | No evaluable |
+| **Funcionalidad** | Corrida real con output commiteado: [`data/oefa.jsonl`](data/oefa.jsonl) (1.749 registros de 176 páginas) y 30 documentos con hash. Reproducible con `npm run scrape` |
+| **Manejo de 429** | Token bucket con **AIMD** + **full jitter** + prioridad de `Retry-After` + circuit breaker global + cola de fallos + `npm run retry-failed`. Escrito a mano en [`src/http/`](src/http/) porque delegarlo a `bottleneck` escondería justo lo que se evalúa |
+| **Código limpio** | Separación transporte / protocolo / dominio / persistencia, sostenida por [`tests/architecture.test.ts`](tests/architecture.test.ts) y puesta a prueba contra un segundo portal |
+| **Robustez** | Recuperación de la vista caída en sus tres formas, validación de magic bytes del PDF, escritura atómica, checkpointing, y **diez condiciones de drift** que detienen la corrida antes de escribir datos vacíos |
+| **Documentación** | Este README, la [bitácora](docs/bitacora.md) del proceso, y los README de [`fixtures/oefa/`](fixtures/oefa/README.md) y [`fixtures/pj/`](fixtures/pj/README.md) |
 
-#### El segundo hallazgo: un documento con dos expedientes
+Sobre el drift, que es el criterio menos visible: el peor modo de falla de un scraper no es la
+excepción, es seguir corriendo tres semanas escribiendo datos vacíos sin que nadie lo note.
+Cada una de las diez condiciones tiene un test que la ve saltar —una aserción que nunca se vio
+fallar es una aserción que no se sabe si funciona—. Los rótulos de las columnas, en cambio,
+**avisan y no detienen**: cambian por una tilde sin que cambie nada más, y una aserción que
+tumba la corrida por cosmética es una aserción que alguien va a desactivar.
 
-§5.8 describió el documento compartido como un caso local —las filas 277 y 278,
-mismo expediente y misma resolución, distinta unidad fiscalizable—. El recorrido
-completo encontró además un par que comparte PDF con **expedientes distintos y
-seiscientas filas de distancia** (índices 1061 y 1689, misma resolución
-`034-2016-OEFA/TFA-SEM`). La invariante que se puede afirmar es la resolución, no
-el expediente. Queda como aviso y no como error: el portal tiene resoluciones que
-acumulan expedientes, y una aserción que tumba la corrida por eso es una aserción
-que alguien va a desactivar.
+## Limitaciones conocidas
 
-#### La capa no hace I/O
+Las cuatro, juntas y sin adornos.
 
-`src/validate/` no abre archivos ni emite requests: recibe datos y devuelve
-hallazgos. El esquema del registro llega inyectado como función, la sonda de
-disco también, y la consulta al portal igual —por eso el modo `--contra-el-sitio`
-se prueba sin red—. El cableado vive en `src/cli/validate.ts`, que es donde ya
-vive el de `scrape` y `download`, y
-[`tests/architecture.test.ts`](tests/architecture.test.ts) lo verifica.
-
-No es preferencia estética: probar los tres desenlaces del disco —está, no está,
-no se pudo mirar— con un validador que abre archivos exige un directorio temporal
-por caso; con la sonda inyectada, cada uno es una línea. El corolario es que
-`sanity.ts`, `informe.ts` y `documentos.ts` no saben qué es un expediente, así
-que los chequeos estructurales sirven tal cual para el próximo portal. Lo
-específico de OEFA está acorralado en un archivo.
-
-**Lo que este bloque no hizo, porque ya estaba hecho:** la detección de drift de
-§6.4. Las diez condiciones que detienen una corrida viven en el adapter desde el
-bloque 4. Aquéllas miran mientras se lee; éstas miran el archivo terminado, y
-fallan distinto: un drift detiene la corrida, un dataset con huecos termina en
-cero y nadie se entera.
-
-### Bloque 7 — Adapter del Poder Judicial ✅
-
-El adapter del sitio objetivo, más el hallazgo que ordenó todo el bloque: **el
-portal está bloqueado, pero su markup no.**
-
-```bash
-npm test                      # 546 tests, sin red
-npm run scrape -- --fuente pj # requiere salida peruana
-npm run smoke:pj              # ejercita el adapter contra el sitio vivo
-bash scripts/capture-pj.sh    # regenera los fixtures desde el archivo web
-```
-
-#### El archivo web sirve lo que el WAF no
-
-El `403` de `jurisprudencia.pj.gob.pe` es una regla del WAF **de ese portal**
-(§2.2). Nada de eso alcanza a un tercero que ya capturó las páginas: el archivo
-web las sirve desde su propio dominio, sin proxy y desde cualquier red. Hay tres
-snapshots útiles —septiembre de 2025 y dos de 2016— y están versionados en
-[`fixtures/pj/`](fixtures/pj/).
-
-La lección de método vale más que el truco: **el diagnóstico de §2.2 fue tan
-concluyente que dejó de buscarse.** Saber exactamente por qué no se podía llegar
-al sitio hizo que nadie preguntara si el markup se podía conseguir sin llegar.
-
-#### Cuatro supuestos refutados por el markup del propio portal
-
-| Se asumía | Lo que dice el markup |
-|---|---|
-| PrimeFaces, «mismo stack» que OEFA | **RichFaces 4.2.2.Final**: cero coincidencias de PrimeFaces en cuatro páginas |
-| `ViewState` client-side, blob base64 de ~1,5 KB | **Server-side**: el handle `8130872589646157352:-5634686416281607506`, en tres muestras separadas por nueve años |
-| Un solo form, `formBusqueda` | `formBuscador` en 2025, y la vista de resultados tiene **tres** forms con el mismo token — uno con `target="_blank"`, que es el del documento |
-| Búsqueda y paginación por evento AJAX | La búsqueda es un POST **no-ajax** que devuelve la página entera |
-
-Y un defecto real en código ya escrito y ya testeado: el `onclick` del portal
-viene envuelto en `jsf.util.chain` con las comillas escapadas (`\'`), y el regex
-de pares de `parseJsfcljs` no matcheaba ninguno. Devolvía `undefined`, con lo que
-el adapter habría marcado **toda** fila del Poder Judicial como enlace ilegible
-en la primera página. Un `\'` de más entre el parser y el sitio, y el síntoma no
-se parece en nada a la causa.
-
-Arreglarlo tuvo una sutileza: **desescapar de entrada rompe el caso bueno.** Un
-`\'` dentro de un valor es un apóstrofo literal —y en un corpus de razones
-sociales aparecen—. `parseJsfcljs` intenta dos veces: primero el texto crudo, y
-solo si no encontró ningún par, el texto con un nivel de escape menos.
-
-#### La afirmación de §4, puesta a prueba desde afuera
-
-`tests/architecture.test.ts` verifica la separación de capas desde adentro:
-nadie mete dominio en protocolo. Lo que no podía responder es la pregunta de
-afuera — **¿sirve de verdad contra otro portal?**
-
-| Módulo | ¿Transfirió? |
-|---|---|
-| `jsf/view.ts`, `commands.ts`, `form.ts`, `view-state.ts`, `partial-response.ts` | ✅ enteros |
-| `jsf/datatable.ts` | ❌ nada: es de PrimeFaces |
-| `store/`, `http/`, `obs/`, chequeos genéricos de `validate/` | ✅ enteros |
-
-Cinco de seis archivos de la capa de protocolo, con el que no transfirió aislado
-en uno solo **porque el bloque 3 lo separó a propósito**. El comentario de
-`datatable.ts` decía: «el próximo portal legacy puede correr Mojarra con
-RichFaces o con componentes propios: ahí `commands.ts` se reusa entero y este
-archivo se tira». Se tiró.
-
-Los tres cambios que la capa sí necesitó no fueron concesiones al segundo portal:
-eran huecos que OEFA no llegaba a mostrar. `parseJsfcljs` desenvuelve
-`jsf.util.chain` —un patrón de Mojarra, no de este sitio—; `JsfView` conserva
-todos los forms del bootstrap —`parseForm` ya admitía en un comentario que con
-varios forms la elección se vuelve incidental—; y `adoptarPagina()` existe
-porque un POST no-ajax devuelve la vista re-renderizada, y reenviar los campos
-viejos manda al servidor un estado que ya no existe.
-
-#### Lo que no se verificó, dicho como corresponde
-
-**El adapter no se ejercitó contra su fuente.** El archivo web captura GETs; en
-este portal los resultados nacen de un POST, así que ningún snapshot trae filas
-de resultado ni controles de paginación.
+**1. El adapter del Poder Judicial no se ejercitó contra su fuente.** El archivo web captura
+GETs; en ese portal los resultados nacen de un POST, así que ningún snapshot trae filas ni
+controles de paginación. Eso deja dos superficies de distinta calidad y mezclarlas sería la
+cobertura simulada que este repositorio rechaza:
 
 | Superficie | Estado |
 |---|---|
 | Ids del form, campos de búsqueda, state saving, los tres forms, forma del `onclick`, descubrimiento del botón «Buscar» | verificado contra markup real |
 | Forma de las filas, comando de paginación, POST de descarga | **sin verificar** — escritos contra lo que documenta un scraper público de terceros |
 
-El diseño se ordenó alrededor de esa asimetría con una regla: **lo que no se
-puede saber se descubre; lo que no se puede descubrir se denuncia con nombre
-propio.** No hay un solo id de componente hardcodeado, y cada fallo de
-descubrimiento es un error que nombra qué request hay que capturar para cerrarlo.
+El diseño se ordenó alrededor de esa asimetría con una regla: **lo que no se puede saber se
+descubre; lo que no se puede descubrir se denuncia con nombre propio.** No hay un solo id de
+componente hardcodeado, y cada fallo de descubrimiento es un error que nombra qué request hay
+que capturar para cerrarlo. Cada fuente declara su estado de evidencia y **el CLI lo imprime
+antes de tocar la red**.
 
-De ahí salen dos decisiones que se ven raras hasta que se lee el porqué:
+**2. El diagnóstico de acceso queda abierto.** Se sabe qué *no* es el problema —ni
+fingerprinting TLS/JA3, ni headers, ni huella HTTP/2, ni allowlist por UA— y que el
+discriminante es un atributo de la IP de origen. No se sabe cuál de los tres: país, ASN o
+reputación puntual. `check-access.sh` lo cierra en un comando desde una red con salida
+peruana.
 
-- **`RegistroPj` guarda las celdas rotuladas con los encabezados**, sin campos con
-  nombre. Declarar `expediente`, `sumilla` o `materia` produciría un archivo
-  lleno de nulos con nombres convincentes.
-- **El tamaño de página se deriva de la primera página.** Es el número que
-  traduce página a offset: con un 10 supuesto contra un servidor que sirve 20, el
-  scraper lee filas válidas del lugar equivocado y el archivo queda con huecos
-  que parecen completos.
+**3. No hay filtros.** El reversing se hizo con el formulario vacío, que devuelve el dataset
+completo. Los cuatro filtros del portal se reenvían vacíos porque JSF exige el submit completo
+del form, pero la búsqueda con valores no está reversada. La interfaz de fuente **se expone
+sin parámetros de filtrado** en vez de aceptarlos y descartarlos en silencio: una firma que
+promete lo que no hace es peor que una que no lo ofrece.
 
-Y una consecuencia de que la paginación sea relativa: `--desde 87` **recorre las
-86 anteriores y las descarta**. Cuesta requests, se dice en el log y hay un
-contador. Emitir el comando con un número inventado devolvería filas
-perfectamente válidas de otro lugar del dataset.
+**4. El camino del proxy nunca corrió contra un proxy real.** `PROXY_URL` está implementado y
+`https-proxy-agent` instalado, pero no se contrató ninguno para esta entrega. Se declara así en
+vez de presentarse como funcionalidad probada. Cuando se use, la IP debe ser **fija durante
+toda la vida de la sesión**: la rotación por request —default de los proveedores
+residenciales— es incompatible con JSF, porque el `JSESSIONID` queda asociado a un nodo y
+cambiar de IP provoca expiración inmediata.
 
-#### Un comando para cerrar lo que falta
+## Bitácora
 
-```bash
-npm run smoke:pj
-```
+El proceso completo, bloque a bloque, está en **[`docs/bitacora.md`](docs/bitacora.md)**: qué
+se descubrió en cada etapa, qué supuestos refutó el sitio y qué decisión salió de ahí.
 
-Separa las tres cosas que se confunden y tienen arreglos distintos: **bloqueo**
-(`403` del WAF — no dice nada del adapter), **supuesto refutado** (llegamos y el
-markup no calza; es el desenlace más informativo, porque significa que ahora hay
-markup real contra el cual corregir) y **fallo de protocolo**. Desde Chile hoy
-devuelve `2` y dice «BLOQUEADO», que es la respuesta correcta.
-
-#### Dos fuentes, cuatro comandos
-
-```bash
-npm run scrape   -- --fuente pj
-npm run download -- --fuente pj
-npm run validate -- --fuente pj
-```
-
-Las rutas por defecto se derivan del nombre (`data/<fuente>.jsonl`,
-`data/<fuente>/`, un checkpoint por comando y por fuente). Cada fuente declara su
-estado de evidencia y **el CLI lo imprime antes de tocar la red**: un adapter no
-ejercitado contra su fuente que corre sin decirlo es la cobertura simulada que
-este repositorio rechaza.
-
-Las aserciones de §6.4 se extrajeron a `src/sources/aserciones.ts` para que las
-usen los dos adapters. Lo que **no** se extrajo es la máquina de recorrido: los
-protocolos difieren de verdad, y forzar al Poder Judicial dentro del molde de
-OEFA no fallaría — produciría datos.
-
-### Bloque 8
-
-Pendiente: documentación final.
-
+| Bloque | Qué cerró |
+|---|---|
+| 1 | Reversing del protocolo en OEFA + diagnóstico de acceso al portal objetivo |
+| 2 | Capa de transporte: cookie jar, token bucket AIMD, retry, circuit breaker |
+| 3 | Capa JSF: `ViewState`, partial-response, serialización de forms, comandos |
+| 4 | Adapter de OEFA, parsers de fila y persistencia JSONL |
+| 5 | Descarga de documentos, cola de fallos y reanudación |
+| 6 | Sanity checks sobre el dataset y los documentos entregados |
+| 7 | Adapter del Poder Judicial, contra markup real recuperado del archivo web |
+| 8 | Documentación de la entrega y separación de la bitácora |
