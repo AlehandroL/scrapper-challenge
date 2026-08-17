@@ -40,11 +40,16 @@ describe('parsearArgs', () => {
   it('lee el rango, la salida y el presupuesto', () => {
     expect(
       parsearArgs([
-        '--desde', '3',
-        '--hasta', '9',
-        '--salida', '/tmp/x.jsonl',
-        '--checkpoint', '/tmp/x.json',
-        '--max-recuperaciones', '1',
+        '--desde',
+        '3',
+        '--hasta',
+        '9',
+        '--salida',
+        '/tmp/x.jsonl',
+        '--checkpoint',
+        '/tmp/x.json',
+        '--max-recuperaciones',
+        '1',
       ]),
     ).toEqual({
       fuente: 'oefa',
@@ -79,15 +84,18 @@ describe('parsearArgs', () => {
   });
 
   it('una ruta explícita gana sobre la derivada', () => {
-    expect(parsearArgs(['--fuente', 'pj', '--salida', '/tmp/otro.jsonl']).salida).toBe('/tmp/otro.jsonl');
+    expect(parsearArgs(['--fuente', 'pj', '--salida', '/tmp/otro.jsonl']).salida).toBe(
+      '/tmp/otro.jsonl',
+    );
   });
 
-  it.each([['--dry-run', 'dryRun'], ['--help', 'ayuda'], ['--reiniciar', 'reiniciar']])(
-    '%s activa %s',
-    (flag, campo) => {
-      expect(parsearArgs([flag])[campo as 'dryRun' | 'ayuda' | 'reiniciar']).toBe(true);
-    },
-  );
+  it.each([
+    ['--dry-run', 'dryRun'],
+    ['--help', 'ayuda'],
+    ['--reiniciar', 'reiniciar'],
+  ])('%s activa %s', (flag, campo) => {
+    expect(parsearArgs([flag])[campo as 'dryRun' | 'ayuda' | 'reiniciar']).toBe(true);
+  });
 
   it('rechaza una flag desconocida en vez de ignorarla', () => {
     expect(() => parsearArgs(['--hastaa', '3'])).toThrow(/Argumentos inválidos/);

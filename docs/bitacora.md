@@ -20,9 +20,9 @@ protocolo y de la arquitectura; esto es el detalle cronológico, bloque a bloque
 > **Sobre las referencias «§».** Apuntan al documento de estrategia con el que se planificó
 > el trabajo, que vive en `planes/` y **no está versionado** — es material de planificación
 > interno y se sacó del repo en el bloque 1 a propósito. Se conservan porque son la
-> trazabilidad de cada decisión, y porque el código las usa con el mismo sentido. Lo que
-> cada una dice está reproducido acá o en el README: no hace falta el documento para
-> seguir el hilo.
+> trazabilidad de cada decisión, y porque el código las usa con el mismo sentido.
+> [`referencias.md`](referencias.md) dice qué afirma cada sección y dónde está reproducida:
+> no hace falta el documento para seguir el hilo.
 
 ---
 

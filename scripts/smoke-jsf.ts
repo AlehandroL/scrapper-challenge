@@ -92,7 +92,9 @@ async function main(): Promise<number> {
   ok(`filas en la página 1: ${pagina1.length} (data-ri ${pagina1[0]}–${pagina1.at(-1)})`);
 
   paso('3/3  Paginación — página 2');
-  const pagina = await view.submitAjax(pageCommand({ tableId: TABLA, first: TAMANO_PAGINA, rows: TAMANO_PAGINA }));
+  const pagina = await view.submitAjax(
+    pageCommand({ tableId: TABLA, first: TAMANO_PAGINA, rows: TAMANO_PAGINA }),
+  );
   const filas2 = pagina.updates.get(TABLA) ?? '';
   const pagina2 = readRowIndices(filas2);
   ok(`filas en la página 2: ${pagina2.length} (data-ri ${pagina2[0]}–${pagina2.at(-1)})`);
@@ -112,7 +114,9 @@ async function main(): Promise<number> {
 
   paso('Métricas de la corrida');
   const s = metrics.snapshot();
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+  console.log(
+    `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`,
+  );
   console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
   console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
 
@@ -128,7 +132,10 @@ async function main(): Promise<number> {
 main().then(
   (codigo) => process.exit(codigo),
   (error: unknown) => {
-    console.error('\n✗ El smoke falló:', error instanceof Error ? `${error.name}: ${error.message}` : error);
+    console.error(
+      '\n✗ El smoke falló:',
+      error instanceof Error ? `${error.name}: ${error.message}` : error,
+    );
     process.exit(1);
   },
 );

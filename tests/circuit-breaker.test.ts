@@ -42,7 +42,10 @@ describe('CircuitBreaker', () => {
 
   it('abierto, rechaza informando cuánto falta del cooldown', () => {
     const reloj = relojManual();
-    const breaker = new CircuitBreaker({ minSamples: 1, threshold: 1, cooldownMs: 30_000 }, reloj.now);
+    const breaker = new CircuitBreaker(
+      { minSamples: 1, threshold: 1, cooldownMs: 30_000 },
+      reloj.now,
+    );
     breaker.recordDegraded();
 
     reloj.avanzar(10_000);
@@ -53,7 +56,10 @@ describe('CircuitBreaker', () => {
 
   it('cumplido el cooldown deja pasar exactamente una sonda', () => {
     const reloj = relojManual();
-    const breaker = new CircuitBreaker({ minSamples: 1, threshold: 1, cooldownMs: 1000 }, reloj.now);
+    const breaker = new CircuitBreaker(
+      { minSamples: 1, threshold: 1, cooldownMs: 1000 },
+      reloj.now,
+    );
     breaker.recordDegraded();
     reloj.avanzar(1001);
 
@@ -86,7 +92,10 @@ describe('CircuitBreaker', () => {
 
   it('si la sonda falla, reabre con el cooldown completo', () => {
     const reloj = relojManual();
-    const breaker = new CircuitBreaker({ minSamples: 1, threshold: 1, cooldownMs: 1000 }, reloj.now);
+    const breaker = new CircuitBreaker(
+      { minSamples: 1, threshold: 1, cooldownMs: 1000 },
+      reloj.now,
+    );
     breaker.recordDegraded();
     reloj.avanzar(1001);
     breaker.assertClosed(CTX);

@@ -71,7 +71,8 @@ export class RevisionOefa {
     if (grupo === undefined) this.#porUuid.set(registro.documentoUuid, [registro]);
     else grupo.push(registro);
 
-    if (registro.anioResolucion === undefined) this.#sinAnioConDocumento.anotar(registro.resolucion);
+    if (registro.anioResolucion === undefined)
+      this.#sinAnioConDocumento.anotar(registro.resolucion);
   }
 
   hallazgos(): Hallazgo[] {
@@ -116,7 +117,10 @@ export class RevisionOefa {
       ),
 
       heterogeneos.length === 0
-        ? ok('documento-compartido-heterogeneo', 'los documentos compartidos coinciden en expediente y resolución')
+        ? ok(
+            'documento-compartido-heterogeneo',
+            'los documentos compartidos coinciden en expediente y resolución',
+          )
         : aviso(
             'documento-compartido-heterogeneo',
             `${numero(heterogeneos.length)} documento(s) compartidos por registros que no ` +
@@ -124,7 +128,10 @@ export class RevisionOefa {
             {
               muestras: heterogeneos
                 .slice(0, MAX_MUESTRAS)
-                .map((g) => `${g[0]?.documentoUuid ?? '?'} (índices ${g.map((r) => r.indice).join(', ')})`),
+                .map(
+                  (g) =>
+                    `${g[0]?.documentoUuid ?? '?'} (índices ${g.map((r) => r.indice).join(', ')})`,
+                ),
             },
           ),
     ];
@@ -137,7 +144,8 @@ export class RevisionOefa {
    */
   #difierenEnLoQueNoDeberian(grupo: readonly RegistroOefa[]): boolean {
     return (
-      new Set(grupo.map((r) => r.expediente)).size > 1 || new Set(grupo.map((r) => r.resolucion)).size > 1
+      new Set(grupo.map((r) => r.expediente)).size > 1 ||
+      new Set(grupo.map((r) => r.resolucion)).size > 1
     );
   }
 

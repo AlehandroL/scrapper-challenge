@@ -132,7 +132,8 @@ function leerLlamada(js: string): ComandoJsfcljs | undefined {
 
   const pares: Record<string, string> = {};
   for (const par of objeto[2].matchAll(PAR)) {
-    if (par[1] !== undefined && par[2] !== undefined) pares[desescapar(par[1])] = desescapar(par[2]);
+    if (par[1] !== undefined && par[2] !== undefined)
+      pares[desescapar(par[1])] = desescapar(par[2]);
   }
   if (Object.keys(pares).length === 0) return undefined;
 

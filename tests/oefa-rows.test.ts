@@ -47,7 +47,8 @@ const PAGINA28 = fragmento('08-page28-uuid-repetida.xml', ID_TABLA);
 const uuidDe = (f: FilaCruda | undefined): string | undefined =>
   f?.documento.estado === 'ok' ? f.documento.uuid : undefined;
 
-const TABLA_VACIA = '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7"></td></tr>';
+const TABLA_VACIA =
+  '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7"></td></tr>';
 
 describe('la respuesta de búsqueda', () => {
   const tabla = parseTabla(BUSQUEDA);
@@ -70,7 +71,11 @@ describe('la respuesta de búsqueda', () => {
    */
   it('el paginador confirma el total por otro camino', () => {
     expect(tabla.paginadorTexto).toBe('Página 1 de 176 (1753 registros)');
-    expect(parsePaginador(tabla.paginadorTexto ?? '')).toEqual({ pagina: 1, paginas: 176, total: 1753 });
+    expect(parsePaginador(tabla.paginadorTexto ?? '')).toEqual({
+      pagina: 1,
+      paginas: 176,
+      total: 1753,
+    });
   });
 
   it('descubre las siete cabeceras', () => {
@@ -277,7 +282,7 @@ describe('derivaciones', () => {
 
   /** El `rowCount` no debe confundirse con el `rows` del paginador. */
   it('readPageSize lee `rows` y no `rowCount`', () => {
-    expect(readPageSize('paginator:{id:[\'x\'],rows:20,rowCount:1753,page:0}')).toBe(20);
+    expect(readPageSize("paginator:{id:['x'],rows:20,rowCount:1753,page:0}")).toBe(20);
     expect(readPageSize('scrollLimit:1753,rows:99')).toBeUndefined();
   });
 });

@@ -56,7 +56,8 @@ import { wrapRows } from '../jsf/datatable.ts';
 import { RegistroBaseSchema, type RegistroBase } from './types.ts';
 
 export const FUENTE = 'pj';
-export const URL_PJ = 'https://jurisprudencia.pj.gob.pe/jurisprudenciaweb/faces/page/resultado.xhtml';
+export const URL_PJ =
+  'https://jurisprudencia.pj.gob.pe/jurisprudenciaweb/faces/page/resultado.xhtml';
 
 /**
  * Los dos nombres de form observados, con nueve años de distancia.
@@ -264,7 +265,11 @@ function contenedorDe(nodo: Seleccion): Seleccion {
   return nodo.parent();
 }
 
-function leerFila($: cheerio.CheerioAPI, nodos: readonly Seleccion[], indice: number): FilaCrudaPj | undefined {
+function leerFila(
+  $: cheerio.CheerioAPI,
+  nodos: readonly Seleccion[],
+  indice: number,
+): FilaCrudaPj | undefined {
   const primero = nodos[0];
   if (primero === undefined) return undefined;
 
@@ -409,7 +414,10 @@ export function identidadPjDe(texto: string, documentoUuid: string | undefined):
 }
 
 /** Rótulo de cada celda: el encabezado si lo hay, `columnaN` si no. */
-export function rotular(celdas: readonly string[], cabeceras: readonly string[]): Record<string, string> {
+export function rotular(
+  celdas: readonly string[],
+  cabeceras: readonly string[],
+): Record<string, string> {
   const campos: Record<string, string> = {};
   celdas.forEach((valor, i) => {
     const rotulo = cabeceras[i];

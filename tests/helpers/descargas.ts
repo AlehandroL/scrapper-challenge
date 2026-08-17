@@ -104,13 +104,15 @@ export async function montarDescargas(
   };
 }
 
-
 export const archivosDe = (dir: string): string[] => readdirSync(dir).sort();
 
 export const contenidoDe = (dir: string, nombre: string): string =>
   readFileSync(join(dir, nombre), 'latin1');
 
-export const datasetBase = (extra: Partial<OpcionesDataset> = {}): OpcionesDataset => ({ total: 25, ...extra });
+export const datasetBase = (extra: Partial<OpcionesDataset> = {}): OpcionesDataset => ({
+  total: 25,
+  ...extra,
+});
 
 export const recolectarPaginas = async (
   fuente: Fuente<RegistroOefa>,

@@ -125,7 +125,11 @@ export async function leerDlq(ruta: string): Promise<EntradaDlq[]> {
   for await (const { numero, valor } of readJsonl(ruta)) {
     const entrada = comoEntrada(valor);
     if (entrada === undefined) {
-      throw new EntradaDlqInvalidaError(ruta, numero, 'faltan campos obligatorios o tienen otro tipo');
+      throw new EntradaDlqInvalidaError(
+        ruta,
+        numero,
+        'faltan campos obligatorios o tienen otro tipo',
+      );
     }
     porId.set(entrada.id, entrada);
   }

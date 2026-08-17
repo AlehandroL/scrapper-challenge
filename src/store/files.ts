@@ -136,7 +136,11 @@ export async function guardarStream(
     if (!validada && magic !== undefined) assertMagic(cabecera, magic, destino);
 
     if (bytes < tamanoMinimo) {
-      throw new ArchivoInvalidoError(destino, 'tamano', `${bytes} byte(s), el mínimo es ${tamanoMinimo}`);
+      throw new ArchivoInvalidoError(
+        destino,
+        'tamano',
+        `${bytes} byte(s), el mínimo es ${tamanoMinimo}`,
+      );
     }
 
     fsyncSync(fd);

@@ -74,13 +74,16 @@ export function stripJsessionid(url: string): string {
  * la causa.
  */
 function formPorDefecto($: cheerio.CheerioAPI): ReturnType<cheerio.CheerioAPI> {
-  const conToken = $('form').filter((_, el) => $(el).find('input[name$="faces.ViewState"]').length > 0);
+  const conToken = $('form').filter(
+    (_, el) => $(el).find('input[name$="faces.ViewState"]').length > 0,
+  );
   return conToken.length > 0 ? conToken.first() : $('form').first();
 }
 
 export function parseForm(html: string, pageUrl: string, formId?: string): JsfForm | undefined {
   const $ = cheerio.load(html);
-  const form = formId === undefined ? formPorDefecto($) : $(`form#${formId.replace(/:/g, '\\:')}`).first();
+  const form =
+    formId === undefined ? formPorDefecto($) : $(`form#${formId.replace(/:/g, '\\:')}`).first();
   return leerForm($, form, pageUrl);
 }
 
@@ -183,6 +186,7 @@ export function toSearchParams(
   for (const [clave, valores] of campos) for (const valor of valores) params.append(clave, valor);
   // `set` y no `append`: los extra son parámetros de protocolo y pisan lo que
   // hubiera con ese nombre, incluido un campo multivalor entero.
-  if (extra !== undefined) for (const [clave, valor] of Object.entries(extra)) params.set(clave, valor);
+  if (extra !== undefined)
+    for (const [clave, valor] of Object.entries(extra)) params.set(clave, valor);
   return params;
 }

@@ -39,20 +39,23 @@ describe('parsearArgs', () => {
   });
 
   it('lee las rutas y las banderas', () => {
-    expect(parsearArgs(['--dataset', '/tmp/d.jsonl', '--hash', '--contra-el-sitio'])).toMatchObject({
-      dataset: '/tmp/d.jsonl',
-      hash: true,
-      contraElSitio: true,
-    });
+    expect(parsearArgs(['--dataset', '/tmp/d.jsonl', '--hash', '--contra-el-sitio'])).toMatchObject(
+      {
+        dataset: '/tmp/d.jsonl',
+        hash: true,
+        contraElSitio: true,
+      },
+    );
   });
 
   /** Una flag mal escrita tiene que fallar, no degradar en silencio a un default. */
-  it.each([['--datasett', 'x'], ['--total', '0'], ['--page-size', 'diez']])(
-    'rechaza «%s %s»',
-    (...args) => {
-      expect(() => parsearArgs(args)).toThrow(/Argumentos inválidos/);
-    },
-  );
+  it.each([
+    ['--datasett', 'x'],
+    ['--total', '0'],
+    ['--page-size', 'diez'],
+  ])('rechaza «%s %s»', (...args) => {
+    expect(() => parsearArgs(args)).toThrow(/Argumentos inválidos/);
+  });
 
   it('reserva un código de salida para «corrió y encontró errores»', () => {
     expect(SALIDA).toEqual({ ok: 0, fallo: 1, uso: 2, conHallazgos: 3 });
@@ -90,7 +93,9 @@ function escribir(nombre: string, lineas: readonly string[]): string {
   return ruta;
 }
 
-const opciones = (extra: Partial<ReturnType<typeof parsearArgs>> = {}): ReturnType<typeof parsearArgs> => ({
+const opciones = (
+  extra: Partial<ReturnType<typeof parsearArgs>> = {},
+): ReturnType<typeof parsearArgs> => ({
   ...parsearArgs([]),
   dataset: join(dir, 'oefa.jsonl'),
   manifiesto: join(dir, 'descargas.jsonl'),
@@ -190,7 +195,9 @@ describe('revisar', () => {
     const { secciones } = await revisar(opciones({ total: 99 }), (identidades) =>
       Promise.resolve({
         total: 2,
-        hallazgos: [{ nivel: 'ok', chequeo: 'sitio-total', mensaje: `${identidades.size} en el archivo` }],
+        hallazgos: [
+          { nivel: 'ok', chequeo: 'sitio-total', mensaje: `${identidades.size} en el archivo` },
+        ],
       }),
     );
 

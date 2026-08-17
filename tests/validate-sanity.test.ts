@@ -170,7 +170,10 @@ describe('huecos y cobertura', () => {
   });
 
   it('presentes más deduplicadas tiene que dar el total declarado', () => {
-    const h = buscar(revisar([reg(0), reg(2)], { valor: 3, origen: 'del checkpoint' }), 'cobertura');
+    const h = buscar(
+      revisar([reg(0), reg(2)], { valor: 3, origen: 'del checkpoint' }),
+      'cobertura',
+    );
 
     expect(h.nivel).toBe('ok');
     expect(h.mensaje).toContain('del checkpoint');

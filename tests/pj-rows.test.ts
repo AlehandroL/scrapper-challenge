@@ -144,14 +144,23 @@ describe('los campos de búsqueda', () => {
   it('el form de resultados trae los filtros con nombre estable', () => {
     const campos = [...(parseForm(BUSQUEDA, URL)?.campos.keys() ?? [])];
 
-    for (const esperado of ['buCorte', 'buEspecialidad', 'buSala', 'buTipoRecurso', 'buTipoResolucion', 'buAnio']) {
+    for (const esperado of [
+      'buCorte',
+      'buEspecialidad',
+      'buSala',
+      'buTipoRecurso',
+      'buTipoResolucion',
+      'buAnio',
+    ]) {
       expect(campos.some((c) => c.endsWith(`:${esperado}`))).toBe(true);
     }
   });
 
   it('el bootstrap de 2025 trae al menos uno de los campos conocidos', () => {
     const campos = [...(parseForm(BOOTSTRAP, URL)?.campos.keys() ?? [])];
-    const reconocidos = CAMPOS_BUSQUEDA.filter((c) => campos.some((n) => n === c || n.endsWith(`:${c}`)));
+    const reconocidos = CAMPOS_BUSQUEDA.filter((c) =>
+      campos.some((n) => n === c || n.endsWith(`:${c}`)),
+    );
     expect(reconocidos).toContain('txtBusqueda');
   });
 
@@ -166,7 +175,11 @@ describe('los campos de búsqueda', () => {
     // Presentes y vacíos: JSF exige el submit completo del form, así que viajan
     // en cada POST con el valor que tenían. Lo que no está reversado es emitirlos
     // **con valores**, que es otra cosa.
-    for (const campo of ['formBusqueda:txtBusqueda', 'formBusqueda:buPalabraClaveValue', 'formBusqueda:buPretensionValue']) {
+    for (const campo of [
+      'formBusqueda:txtBusqueda',
+      'formBusqueda:buPalabraClaveValue',
+      'formBusqueda:buPretensionValue',
+    ]) {
       expect(campos?.get(campo)).toEqual(['']);
     }
   });
@@ -242,7 +255,7 @@ describe('el onclick real, que es el que rompía el parser', () => {
     });
     // Y abre en otra pestaña, igual que frmDetalle2: el portal usa el target del
     // form para decidir dónde pinta la respuesta.
-    expect(onclick).toContain("_blank");
+    expect(onclick).toContain('_blank');
   });
 });
 
@@ -269,10 +282,10 @@ describe('parseTablaPj', () => {
       '<table><tbody>' +
       '<tr><td>1</td><td>Penal</td><td><a id="formBusqueda:repeat:0:j_idt158" ' +
       'onclick="mojarra.jsfcljs(document.getElementById(\'frmDetalle2\')," +' +
-      '"{\'formBusqueda:repeat:0:j_idt158\':\'formBusqueda:repeat:0:j_idt158\',\'uuid\':\'abc\'},\'\')">Ver</a></td></tr>' +
+      "\"{'formBusqueda:repeat:0:j_idt158':'formBusqueda:repeat:0:j_idt158','uuid':'abc'},'')\">Ver</a></td></tr>" +
       '<tr><td>2</td><td>Civil</td><td><a id="formBusqueda:repeat:1:j_idt158" ' +
       'onclick="mojarra.jsfcljs(document.getElementById(\'frmDetalle2\')," +' +
-      '"{\'formBusqueda:repeat:1:j_idt158\':\'formBusqueda:repeat:1:j_idt158\',\'uuid\':\'def\'},\'\')">Ver</a></td></tr>' +
+      "\"{'formBusqueda:repeat:1:j_idt158':'formBusqueda:repeat:1:j_idt158','uuid':'def'},'')\">Ver</a></td></tr>" +
       '</tbody></table>';
 
     const tabla = parseTablaPj(html);

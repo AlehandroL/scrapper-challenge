@@ -1,0 +1,16 @@
+# Markup real capturado de los dos portales. Es evidencia de qué servía el
+# sitio, no código: reformatearlo la invalida, y varios tests comparan contra
+# estos bytes.
+fixtures/
+
+# Salida de las corridas y de los scripts de diagnóstico.
+data/
+evidencia/
+descargas/
+
+node_modules/
+package-lock.json
+
+# La prosa del README y de docs/ está cortada a mano. Prettier reflowearía los
+# saltos de línea y produciría un diff enorme sin mejorar nada.
+*.md

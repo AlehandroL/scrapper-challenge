@@ -8,7 +8,8 @@ import { loadConfig } from '../src/config.ts';
 describe('redactUrl', () => {
   it('borra el jsessionid que JSF reescribe en el path', () => {
     // Tomado tal cual del <form action> de fixtures/oefa/01-bootstrap.html.
-    const url = 'https://publico.oefa.gob.pe/repdig/consulta/consultaTfa.xhtml;jsessionid=A1B2C3D4E5';
+    const url =
+      'https://publico.oefa.gob.pe/repdig/consulta/consultaTfa.xhtml;jsessionid=A1B2C3D4E5';
     expect(redactUrl(url)).toBe(
       'https://publico.oefa.gob.pe/repdig/consulta/consultaTfa.xhtml;jsessionid=REDACTED',
     );

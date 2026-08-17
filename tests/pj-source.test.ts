@@ -37,7 +37,12 @@ import {
 import { createPjSource } from '../src/sources/pj.ts';
 import type { RegistroPj } from '../src/sources/pj-rows.ts';
 import type { Fuente, Pagina } from '../src/sources/types.ts';
-import { FORM_DETALLE, startPortalPj, type OpcionesPortalPj, type PortalPj } from './helpers/pj-server.ts';
+import {
+  FORM_DETALLE,
+  startPortalPj,
+  type OpcionesPortalPj,
+  type PortalPj,
+} from './helpers/pj-server.ts';
 
 let portal: PortalPj;
 let metrics: Metrics;
@@ -95,7 +100,9 @@ describe('recorrido', () => {
 
     const busqueda = portal.posts[0];
     expect(busqueda).toBeDefined();
-    expect([...(busqueda?.keys() ?? [])].filter((k) => k.startsWith('javax.faces.partial'))).toEqual([]);
+    expect(
+      [...(busqueda?.keys() ?? [])].filter((k) => k.startsWith('javax.faces.partial')),
+    ).toEqual([]);
     // Y sí lleva el form completo, que es lo que JSF exige.
     expect(busqueda?.get(`formBuscador:txtBusqueda`)).toBe('');
     expect(busqueda?.get('javax.faces.ViewState')).toMatch(/^\d+:-\d+$/);
@@ -218,7 +225,9 @@ describe('descubrimiento del protocolo', () => {
     const fuente = await montar({ total: 25 });
     const paginas = await recorrer(fuente);
 
-    expect(() => fuente.prepararDescarga(paginas[0]!, paginas[1]!.filas[0]!)).toThrow(PaginaDesalineadaError);
+    expect(() => fuente.prepararDescarga(paginas[0]!, paginas[1]!.filas[0]!)).toThrow(
+      PaginaDesalineadaError,
+    );
   });
 });
 
@@ -271,7 +280,10 @@ describe('drift', () => {
       logger: silentLogger,
       retryHooks: { sleep: async () => {}, rng: () => 0 },
     });
-    const view = new JsfView({ session, logger: silentLogger, metrics: new Metrics() }, { pageUrl: portal.pageUrl });
+    const view = new JsfView(
+      { session, logger: silentLogger, metrics: new Metrics() },
+      { pageUrl: portal.pageUrl },
+    );
     const fuente = createPjSource({ view, logger: silentLogger, metrics: new Metrics() });
 
     await expect(recorrer(fuente)).rejects.toMatchObject({ kind: 'bootstrap' });
@@ -335,7 +347,10 @@ describe('vista caída (state saving server-side)', () => {
   });
 
   it('el presupuesto de recuperaciones corta en vez de ciclar para siempre', async () => {
-    const fuente = await montar({ total: 60, expirarEnPagina: 2, expirarVeces: 9 }, { maxRecuperaciones: 2 });
+    const fuente = await montar(
+      { total: 60, expirarEnPagina: 2, expirarVeces: 9 },
+      { maxRecuperaciones: 2 },
+    );
     await expect(recorrer(fuente)).rejects.toBeInstanceOf(RecuperacionAgotadaError);
   });
 
@@ -347,7 +362,9 @@ describe('vista caída (state saving server-side)', () => {
     // primera página ya no restaura esas filas, y pedir su documento con él
     // devolvería la página re-renderizada en vez del PDF (§5.4).
     expect(paginas[0]?.generacion).toBe(1);
-    expect(() => fuente.prepararDescarga(paginas[0]!, paginas[0]!.filas[0]!)).toThrow(PaginaDesalineadaError);
+    expect(() => fuente.prepararDescarga(paginas[0]!, paginas[0]!.filas[0]!)).toThrow(
+      PaginaDesalineadaError,
+    );
     // La última, en cambio, se leyó con la vista vigente y sí sirve.
     const ultima = paginas.at(-1)!;
     expect(() => fuente.prepararDescarga(ultima, ultima.filas[0]!)).not.toThrow();
@@ -385,7 +402,9 @@ describe('esquema del registro', () => {
     const fuente = await montar({ total: 25 });
     const paginas = await recorrer(fuente);
     expect(paginas).toHaveLength(3);
-    expect(Object.keys(metrics.snapshot().contadores).filter((k) => k.startsWith('sources.drift.'))).toEqual([]);
+    expect(
+      Object.keys(metrics.snapshot().contadores).filter((k) => k.startsWith('sources.drift.')),
+    ).toEqual([]);
     expect(StructuralDriftError.name).toBe('StructuralDriftError');
   });
 });

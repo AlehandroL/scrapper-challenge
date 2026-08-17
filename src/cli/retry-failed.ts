@@ -102,14 +102,19 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (error) {
-    throw new Error(`Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   const { values } = parsed;
   const crudo = values['max-intentos'];
   const maxIntentos = crudo === undefined ? MAX_INTENTOS_POR_DEFECTO : Number(crudo);
   if (!Number.isInteger(maxIntentos) || maxIntentos < 1) {
-    throw new Error(`Argumentos inválidos: --max-intentos debe ser un entero ≥ 1, llegó «${crudo}»`);
+    throw new Error(
+      `Argumentos inválidos: --max-intentos debe ser un entero ≥ 1, llegó «${crudo}»`,
+    );
   }
 
   const fuente = values.fuente ?? FUENTE_POR_DEFECTO;
@@ -199,7 +204,8 @@ export function reconciliar(
       error: 'no-encontrado',
       intentos: entrada.intentos + 1,
       ultimoTs: ahora,
-      detalle: 'se recorrió su página y la fila no apareció: el registro se movió o dejó de publicarse',
+      detalle:
+        'se recorrió su página y la fila no apareció: el registro se movió o dejó de publicarse',
     });
   }
 
@@ -243,7 +249,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   const plan = planificar(entradas, opciones.maxIntentos);
 
   paso(`Cola: ${entradas.length} entrada(s)`);
-  ok(`${plan.pendientes.length} por reintentar · ${plan.agotadas.length} con el presupuesto agotado`);
+  ok(
+    `${plan.pendientes.length} por reintentar · ${plan.agotadas.length} con el presupuesto agotado`,
+  );
   if (plan.pendientes.length === 0) {
     paso('Nada que reintentar');
     return SALIDA.ok;
@@ -256,7 +264,9 @@ export async function main(argv: readonly string[]): Promise<number> {
 
   if (opciones.dryRun) {
     for (const e of plan.pendientes) {
-      console.log(`    ${e.id}  pág. ${String(e.contexto?.pagina ?? '?')}  ${e.error}  ${e.intentos} intento(s)`);
+      console.log(
+        `    ${e.id}  pág. ${String(e.contexto?.pagina ?? '?')}  ${e.error}  ${e.intentos} intento(s)`,
+      );
     }
     paso('OK (dry-run: no se tocó la red)');
     return SALIDA.ok;
@@ -370,9 +380,13 @@ export async function main(argv: readonly string[]): Promise<number> {
   for (const linea of lineasDeSalud(metrics.snapshot())) console.log(linea);
 
   if (fallo !== undefined) {
-    if (fallo instanceof SourceError) console.error(`\n✗ ${fallo.name} [${fallo.kind}]: ${fallo.message}`);
+    if (fallo instanceof SourceError)
+      console.error(`\n✗ ${fallo.name} [${fallo.kind}]: ${fallo.message}`);
     else if (fallo instanceof AccessDeniedError) console.error(`\n✗ ${fallo.message}`);
-    else console.error(`\n✗ ${fallo instanceof Error ? `${fallo.name}: ${fallo.message}` : String(fallo)}`);
+    else
+      console.error(
+        `\n✗ ${fallo instanceof Error ? `${fallo.name}: ${fallo.message}` : String(fallo)}`,
+      );
     console.error('  la cola quedó actualizada con lo que se alcanzó a reintentar.');
     return SALIDA.fallo;
   }
@@ -411,11 +425,8 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     await cerrarLogs();
     process.exit(codigo);
   };
-  main(process.argv.slice(2)).then(
-    salir,
-    (error: unknown) => {
-      console.error('\n✗ Fallo no controlado:', error);
-      return salir(SALIDA.fallo);
-    },
-  );
+  main(process.argv.slice(2)).then(salir, (error: unknown) => {
+    console.error('\n✗ Fallo no controlado:', error);
+    return salir(SALIDA.fallo);
+  });
 }

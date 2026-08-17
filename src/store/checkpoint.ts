@@ -159,8 +159,13 @@ export function planificarReanudacion(
 ): PlanReanudacion {
   if (pedido.desde !== undefined) return { desde: pedido.desde };
   if (cp === undefined) return {};
-  if (!esCompatible(cp, { fuente: pedido.fuente, tarea: pedido.tarea, pageSize: pedido.pageSize })) {
-    return { mensaje: 'el checkpoint es de otra fuente, de otro comando o de otro tamaño de página: se ignora' };
+  if (
+    !esCompatible(cp, { fuente: pedido.fuente, tarea: pedido.tarea, pageSize: pedido.pageSize })
+  ) {
+    return {
+      mensaje:
+        'el checkpoint es de otra fuente, de otro comando o de otro tamaño de página: se ignora',
+    };
   }
 
   const desde = cp.ultimaPagina + 1;
@@ -208,7 +213,8 @@ function comoCheckpoint(valor: unknown): Checkpoint | undefined {
   const entero = (x: unknown): boolean => typeof x === 'number' && Number.isInteger(x) && x >= 0;
   if (typeof v.fuente !== 'string' || v.fuente === '') return undefined;
   if (typeof v.tarea !== 'string' || v.tarea === '') return undefined;
-  if (!entero(v.pageSize) || !entero(v.total) || !entero(v.ultimaPagina) || !entero(v.registros)) return undefined;
+  if (!entero(v.pageSize) || !entero(v.total) || !entero(v.ultimaPagina) || !entero(v.registros))
+    return undefined;
   if (typeof v.actualizadoEn !== 'string') return undefined;
   // Ausente es válido —checkpoint viejo—; presente y no booleano, no.
   if (v.completo !== undefined && typeof v.completo !== 'boolean') return undefined;

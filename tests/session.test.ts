@@ -216,7 +216,9 @@ describe('Session', () => {
   });
 
   it('el breaker corta ante degradación sostenida', async () => {
-    const d = deps({ breaker: new CircuitBreaker({ minSamples: 2, threshold: 1, cooldownMs: 60_000 }) });
+    const d = deps({
+      breaker: new CircuitBreaker({ minSamples: 2, threshold: 1, cooldownMs: 60_000 }),
+    });
     const s = createSession(d);
 
     const error = await s.get(`${server.url}/unavailable`).catch((e: unknown) => e);
@@ -241,7 +243,10 @@ describe('Session', () => {
    */
   it('un 404 durante la sonda del half-open no traba el circuito', async () => {
     let ahora = 0;
-    const breaker = new CircuitBreaker({ minSamples: 2, threshold: 1, cooldownMs: 60_000 }, () => ahora);
+    const breaker = new CircuitBreaker(
+      { minSamples: 2, threshold: 1, cooldownMs: 60_000 },
+      () => ahora,
+    );
     const d = deps({ breaker });
     const s = createSession(d);
 

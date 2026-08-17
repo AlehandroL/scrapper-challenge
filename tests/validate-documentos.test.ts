@@ -13,7 +13,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { revisarDocumentos, type EntradaDocumento, type Sonda } from '../src/validate/documentos.ts';
+import {
+  revisarDocumentos,
+  type EntradaDocumento,
+  type Sonda,
+} from '../src/validate/documentos.ts';
 import type { Hallazgo, Nivel } from '../src/validate/informe.ts';
 
 const entrada = (id: string, extra: Partial<EntradaDocumento> = {}): EntradaDocumento => ({
@@ -25,12 +29,16 @@ const entrada = (id: string, extra: Partial<EntradaDocumento> = {}): EntradaDocu
   ...extra,
 });
 
-const dataset = (...ids: readonly string[]): ReadonlyMap<string, { readonly documentoUuid?: string }> =>
+const dataset = (
+  ...ids: readonly string[]
+): ReadonlyMap<string, { readonly documentoUuid?: string }> =>
   new Map(ids.map((id) => [id, { documentoUuid: `uuid-${id}` }]));
 
 /** Una sonda que responde desde un objeto: el disco, sin disco. */
-const sondaDe = (archivos: Readonly<Record<string, { bytes: number; sha256?: string }>>): Sonda =>
-  (archivo) => Promise.resolve(archivos[archivo]);
+const sondaDe =
+  (archivos: Readonly<Record<string, { bytes: number; sha256?: string }>>): Sonda =>
+  (archivo) =>
+    Promise.resolve(archivos[archivo]);
 
 const nivelDe = (hallazgos: readonly Hallazgo[], chequeo: string): Nivel | undefined =>
   hallazgos.find((h) => h.chequeo === chequeo)?.nivel;

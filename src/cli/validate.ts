@@ -130,7 +130,9 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (e) {
-    throw new Error(`Argumentos inválidos: ${e instanceof Error ? e.message : String(e)}`);
+    throw new Error(`Argumentos inválidos: ${e instanceof Error ? e.message : String(e)}`, {
+      cause: e,
+    });
   }
 
   const { values } = parsed;
@@ -227,7 +229,9 @@ class RevisionBasica implements RevisionDominio {
 }
 
 /** Las líneas del manifiesto que tienen la forma que los chequeos necesitan. */
-async function leerEntradas(ruta: string): Promise<{ entradas: EntradaDocumento[]; invalidas: number }> {
+async function leerEntradas(
+  ruta: string,
+): Promise<{ entradas: EntradaDocumento[]; invalidas: number }> {
   const entradas: EntradaDocumento[] = [];
   let invalidas = 0;
 
@@ -263,11 +267,13 @@ function totalDeclarado(
   vivo: number | undefined,
 ): { total?: TotalDeclarado; nota?: string } {
   if (vivo !== undefined) return { total: { valor: vivo, origen: 'que el portal declara ahora' } };
-  if (opciones.total !== undefined) return { total: { valor: opciones.total, origen: 'pasado con --total' } };
+  if (opciones.total !== undefined)
+    return { total: { valor: opciones.total, origen: 'pasado con --total' } };
 
   try {
     const cp = leerCheckpoint(opciones.checkpoint);
-    if (cp !== undefined) return { total: { valor: cp.total, origen: `del checkpoint de «${cp.tarea}»` } };
+    if (cp !== undefined)
+      return { total: { valor: cp.total, origen: `del checkpoint de «${cp.tarea}»` } };
   } catch (e) {
     if (!(e instanceof CheckpointInvalidoError)) throw e;
     return { nota: `checkpoint ilegible: ${e.message}` };
@@ -308,7 +314,9 @@ export async function revisar(opciones: OpcionesCli, consultar?: ConsultaSitio):
   const descriptor = descriptorDe(opciones.fuente);
   const revision = new RevisionDataset(descriptor.validarRegistro, { pageSize: opciones.pageSize });
   const dominio: RevisionDominio =
-    descriptor.nombre === 'oefa' ? (new RevisionOefa() as unknown as RevisionDominio) : new RevisionBasica();
+    descriptor.nombre === 'oefa'
+      ? (new RevisionOefa() as unknown as RevisionDominio)
+      : new RevisionBasica();
   try {
     for await (const { numero: linea, valor } of readJsonl<unknown>(opciones.dataset)) {
       const registro = revision.agregar(linea, valor);
@@ -488,13 +496,16 @@ async function preguntarleAlSitio(
           `el portal declara ${numero(pagina.total)} fila(s), en ${metrics.snapshot().requests} request(s)`,
         ),
         faltan.length === 0
-          ? ok('sitio-primera-pagina', `las ${pagina.filas.length} filas de la página 1 están en el dataset`)
+          ? ok(
+              'sitio-primera-pagina',
+              `las ${pagina.filas.length} filas de la página 1 están en el dataset`,
+            )
           : error(
               'sitio-primera-pagina',
               faltan.length === pagina.filas.length
                 ? 'ninguna fila de la página 1 del portal está en el dataset: cambió el sitio o el parser'
                 : `${faltan.length} de ${pagina.filas.length} filas de la página 1 no están en el dataset: ` +
-                  'el organismo publicó algo desde la corrida',
+                    'el organismo publicó algo desde la corrida',
               { muestras: faltan.slice(0, 5) },
             ),
       ],
@@ -509,11 +520,8 @@ if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.
     await cerrarLogs();
     process.exit(codigo);
   };
-  main(process.argv.slice(2)).then(
-    salir,
-    (e: unknown) => {
-      console.error('\n✗ Fallo no controlado:', e);
-      return salir(SALIDA.fallo);
-    },
-  );
+  main(process.argv.slice(2)).then(salir, (e: unknown) => {
+    console.error('\n✗ Fallo no controlado:', e);
+    return salir(SALIDA.fallo);
+  });
 }

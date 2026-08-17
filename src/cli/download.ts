@@ -291,7 +291,11 @@ export async function descargar<R extends RegistroDescargable>(
 
     // El checkpoint se termina de validar acá y no antes: el total lo declara la
     // búsqueda, y el `desde` hay que decidirlo antes de emitirla.
-    if (resumen.paginas === 0 && opts.totalEsperado !== undefined && pagina.total !== opts.totalEsperado) {
+    if (
+      resumen.paginas === 0 &&
+      opts.totalEsperado !== undefined &&
+      pagina.total !== opts.totalEsperado
+    ) {
       resumen.totalCambio = true;
       deps.logger.warn(
         { antes: opts.totalEsperado, ahora: pagina.total },
@@ -374,7 +378,10 @@ export async function descargar<R extends RegistroDescargable>(
       const destino = join(opts.destino, nombre);
       try {
         const res = await deps.emisor.streamCommand(deps.fuente.prepararDescarga(pagina, fila));
-        const guardado = await guardarStream(res.data, destino, { magic: PDF_MAGIC, tamanoMinimo: minimo });
+        const guardado = await guardarStream(res.data, destino, {
+          magic: PDF_MAGIC,
+          tamanoMinimo: minimo,
+        });
 
         invalidasSeguidas = 0;
         bajado = { archivo: nombre, ...guardado };
@@ -384,7 +391,16 @@ export async function descargar<R extends RegistroDescargable>(
         resumen.bytes += guardado.bytes;
         deps.metrics.increment('descargas.ok');
         deps.metrics.increment('descargas.bytes', guardado.bytes);
-        anotar(deps, estado, resumen, registro, pagina, documentoUuid, bajado, cabecera(res, 'content-disposition'));
+        anotar(
+          deps,
+          estado,
+          resumen,
+          registro,
+          pagina,
+          documentoUuid,
+          bajado,
+          cabecera(res, 'content-disposition'),
+        );
       } catch (error) {
         // Un 403 o un circuito abierto no son un problema de este documento: son
         // el servidor diciendo que paremos.
@@ -486,7 +502,8 @@ function codigoDe(error: unknown): string | undefined {
   return undefined;
 }
 
-const intentosDe = (error: unknown): number => (error instanceof TransportError ? error.attempts : 1);
+const intentosDe = (error: unknown): number =>
+  error instanceof TransportError ? error.attempts : 1;
 
 function cabecera(res: AxiosResponse<unknown>, nombre: string): string | undefined {
   const valor: unknown = res.headers[nombre];
@@ -507,7 +524,10 @@ function cabecera(res: AxiosResponse<unknown>, nombre: string): string | undefin
  * infiere del nombre.
  */
 export const nombreDeArchivoOefa = (registro: RegistroOefa, documentoUuid: string): string => {
-  const slug = sanitizar(registro.resolucion === '' ? registro.expediente : registro.resolucion, 80);
+  const slug = sanitizar(
+    registro.resolucion === '' ? registro.expediente : registro.resolucion,
+    80,
+  );
   return slug === '' ? `${documentoUuid}.pdf` : `${documentoUuid}_${slug}.pdf`;
 };
 
@@ -533,7 +553,10 @@ export const nombreDeArchivoPj = (registro: RegistroPj, documentoUuid: string): 
  * existe un disco, y meterle esto sería la primera grieta de esa separación. El
  * composition root es el lugar donde las dos capas se encuentran.
  */
-const NOMBRE_DE_ARCHIVO: Record<string, (registro: RegistroDescargable, documentoUuid: string) => string> = {
+const NOMBRE_DE_ARCHIVO: Record<
+  string,
+  (registro: RegistroDescargable, documentoUuid: string) => string
+> = {
   oefa: (registro, uuid) => nombreDeArchivoOefa(registro as RegistroOefa, uuid),
   pj: (registro, uuid) => nombreDeArchivoPj(registro as RegistroPj, uuid),
 };
@@ -566,7 +589,12 @@ export async function leerManifiesto(
   try {
     for await (const { valor } of readJsonl<Partial<EntradaManifiesto>>(ruta)) {
       const { id, documentoUuid, archivo, bytes, sha256 } = valor;
-      if (typeof id !== 'string' || typeof archivo !== 'string' || typeof documentoUuid !== 'string') continue;
+      if (
+        typeof id !== 'string' ||
+        typeof archivo !== 'string' ||
+        typeof documentoUuid !== 'string'
+      )
+        continue;
       estado.registros.add(id);
       estado.documentos.set(documentoUuid, {
         archivo,
@@ -638,7 +666,10 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (error) {
-    throw new Error(`Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   const { values } = parsed;
@@ -737,7 +768,10 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     checkpoint = opciones.reiniciar ? undefined : leerCheckpoint(opciones.checkpoint);
   } catch (error) {
-    logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'checkpoint ilegible: se ignora');
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      'checkpoint ilegible: se ignora',
+    );
   }
 
   const plan = planificarReanudacion(checkpoint, {
@@ -760,15 +794,20 @@ export async function main(argv: readonly string[]): Promise<number> {
   const writer = opciones.dryRun ? undefined : openJsonlWriter(opciones.manifiesto);
   const dlq = opciones.dryRun ? colaEnMemoria() : abrirDlq(opciones.dlq);
 
-  paso(`Descargando de ${fuente.nombre}${opciones.dryRun ? ' (dry-run: no se baja ni se escribe nada)' : ''}`);
-  if (estado.registros.size > 0) ok(`${estado.registros.size} registro(s) ya en el manifiesto: se omiten`);
+  paso(
+    `Descargando de ${fuente.nombre}${opciones.dryRun ? ' (dry-run: no se baja ni se escribe nada)' : ''}`,
+  );
+  if (estado.registros.size > 0)
+    ok(`${estado.registros.size} registro(s) ya en el manifiesto: se omiten`);
   if (plan.mensaje !== undefined) ok(plan.mensaje);
 
   let interrumpido = false;
   const alInterrumpir = (): void => {
     if (interrumpido) process.exit(SALIDA.interrumpida);
     interrumpido = true;
-    console.error('\n  interrupción recibida: cerrando al terminar el documento (Ctrl-C otra vez para cortar ya)');
+    console.error(
+      '\n  interrupción recibida: cerrando al terminar el documento (Ctrl-C otra vez para cortar ya)',
+    );
   };
   process.on('SIGINT', alInterrumpir);
 
@@ -797,7 +836,9 @@ export async function main(argv: readonly string[]): Promise<number> {
     dlq,
     logger,
     metrics,
-    ...(writer === undefined ? {} : { anotar: (entrada: EntradaManifiesto) => writer.append(entrada) }),
+    ...(writer === undefined
+      ? {}
+      : { anotar: (entrada: EntradaManifiesto) => writer.append(entrada) }),
     alCompletarPagina: (pagina, resumen) => {
       writer?.flush();
       if (opciones.dryRun) return;
@@ -826,7 +867,9 @@ export async function main(argv: readonly string[]): Promise<number> {
     // corrieron. Recorrer de nuevo desde la página 1 es barato —lo ya bajado se
     // omite por manifiesto— y es lo único correcto.
     if (resumen.totalCambio) {
-      console.error('\n  el total del sitio cambió: se descarta el checkpoint y se recorre desde la página 1');
+      console.error(
+        '\n  el total del sitio cambió: se descarta el checkpoint y se recorre desde la página 1',
+      );
       if (!opciones.dryRun) borrarCheckpoint(opciones.checkpoint);
       resumen = await descargar(deps, opcionesEngine);
     }
@@ -892,9 +935,13 @@ function reportarFallo(error: unknown, metrics: Metrics): number {
     console.error(`\n✗ ${error.message}`);
     console.error('  la corrida se detiene: insistir es la vía corta al bloqueo de IP (§5.6)');
   } else {
-    console.error(`\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
+    console.error(
+      `\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+    );
   }
-  console.error('  lo descargado hasta acá está completo y validado; el manifiesto quedó consistente.');
+  console.error(
+    '  lo descargado hasta acá está completo y validado; el manifiesto quedó consistente.',
+  );
   // Antes iba solo `contadores`, que ante un fallo temprano es `{}` y no dice
   // nada. Lo que explica la corrida es el resto del snapshot.
   for (const linea of lineasDeSalud(metrics.snapshot())) console.error(linea);

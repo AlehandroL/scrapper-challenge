@@ -73,7 +73,9 @@ async function main(): Promise<number> {
 
   paso('Métricas de la corrida');
   const s = metrics.snapshot();
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+  console.log(
+    `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`,
+  );
   console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
 
   const fallidas = comprobaciones.filter(([, pasa]) => !pasa);

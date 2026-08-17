@@ -76,7 +76,8 @@ const partial = (updates: readonly (readonly [string, string])[], token: string)
   `<update id="j_id1:javax.faces.ViewState:0"><![CDATA[${token}]]></update>` +
   `</changes></partial-response>`;
 
-const FILA_VACIA = '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7">Sin resultados</td></tr>';
+const FILA_VACIA =
+  '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7">Sin resultados</td></tr>';
 
 /** Sustituye el token en el `<input>` del HTML del bootstrap. */
 const conTokenHtml = (html: string, token: string): string =>
@@ -183,7 +184,9 @@ export interface JsfTestServer {
   close(): Promise<void>;
 }
 
-export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): Promise<JsfTestServer> {
+export async function startJsfServer(
+  opts: { dataset?: OpcionesDataset } = {},
+): Promise<JsfTestServer> {
   const hits: Record<string, number> = {};
   const posts: ReceivedPost[] = [];
 
@@ -229,9 +232,14 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
     const tam = dataset?.pageSize ?? 10;
 
     const alineado =
-      !descargaDesalineada && ri !== undefined && offset !== undefined && ri >= offset && ri < offset + tam;
+      !descargaDesalineada &&
+      ri !== undefined &&
+      offset !== undefined &&
+      ri >= offset &&
+      ri < offset + tam;
     const forzarHtml =
-      descargaNoPdf === 'todas' || (Array.isArray(descargaNoPdf) && ri !== undefined && descargaNoPdf.includes(ri));
+      descargaNoPdf === 'todas' ||
+      (Array.isArray(descargaNoPdf) && ri !== undefined && descargaNoPdf.includes(ri));
 
     // Token de otra página: 200, text/html, la página re-renderizada y ni un byte
     // de PDF. Es el resultado exacto del experimento de §5.4.
@@ -256,7 +264,8 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
     hits[ruta] = (hits[ruta] ?? 0) + 1;
 
     if (req.method === 'GET') {
-      if (emitirCookie) res.setHeader('Set-Cookie', `${NOMBRE_COOKIE}=s-${generacion}; Path=/; HttpOnly`);
+      if (emitirCookie)
+        res.setHeader('Set-Cookie', `${NOMBRE_COOKIE}=s-${generacion}; Path=/; HttpOnly`);
       // Sin offset: el bootstrap no renderizó ninguna página de resultados, así
       // que su token no alinea con ninguna fila.
       return responder(res, 200, 'text/html;charset=UTF-8', conTokenHtml(BOOTSTRAP, rotar()));
@@ -266,7 +275,11 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
     req.on('data', (c: Buffer) => trozos.push(c));
     req.on('end', () => {
       const fields = new URLSearchParams(Buffer.concat(trozos).toString('utf8'));
-      posts.push({ path: ruta, fields, headers: req.headers as Record<string, string | undefined> });
+      posts.push({
+        path: ruta,
+        fields,
+        headers: req.headers as Record<string, string | undefined>,
+      });
 
       // Un POST sin `Faces-Request` es, o bien una descarga (`mojarra.jsfcljs`),
       // o bien un evento ajax al que se le olvidó el header. Se distinguen por el
@@ -307,14 +320,24 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
       // de falla del proyecto, y por eso el falso lo reproduce tal cual.
       const tieneCookie = (req.headers.cookie ?? '').includes(NOMBRE_COOKIE);
       if (!esBusqueda && !tieneCookie) {
-        return responder(res, 200, 'text/xml;charset=UTF-8', partial([[TABLA, FILA_VACIA]], rotar()));
+        return responder(
+          res,
+          200,
+          'text/xml;charset=UTF-8',
+          partial([[TABLA, FILA_VACIA]], rotar()),
+        );
       }
 
       if (dataset === undefined) {
         // Los fixtures son dos páginas fijas: la búsqueda trae los data-ri 0–9 y
         // cualquier evento de paginación, los 10–19.
         const cuerpo = esBusqueda ? BUSQUEDA : PAGINA2;
-        return responder(res, 200, 'text/xml;charset=UTF-8', conTokenPartial(cuerpo, rotar(esBusqueda ? 0 : 10)));
+        return responder(
+          res,
+          200,
+          'text/xml;charset=UTF-8',
+          conTokenPartial(cuerpo, rotar(esBusqueda ? 0 : 10)),
+        );
       }
 
       // El offset que se anota es el de las filas **servidas**, no el pedido: con
@@ -373,10 +396,18 @@ export async function startJsfServer(opts: { dataset?: OpcionesDataset } = {}): 
 function pdfSintetico(documento: string, corto: boolean): Buffer {
   if (corto) return Buffer.from('%PDF-', 'latin1');
   const relleno = `%${'0123456789'.repeat(120)}\n`;
-  return Buffer.from(`%PDF-1.4\n%\xe2\xe3\xcf\xd3\n% documento=${documento}\n${relleno}%%EOF\n`, 'latin1');
+  return Buffer.from(
+    `%PDF-1.4\n%\xe2\xe3\xcf\xd3\n% documento=${documento}\n${relleno}%%EOF\n`,
+    'latin1',
+  );
 }
 
-function responder(res: http.ServerResponse, status: number, contentType: string, cuerpo: string): void {
+function responder(
+  res: http.ServerResponse,
+  status: number,
+  contentType: string,
+  cuerpo: string,
+): void {
   res.writeHead(status, { 'Content-Type': contentType });
   res.end(cuerpo);
 }
@@ -464,7 +495,11 @@ function filasDe(d: OpcionesDataset, firstPedido: number): string {
     while (identicas.has(ri) && identicas.has(ri - salto) && base - salto > 0) salto += 1;
     const origen = Math.max(0, base - salto);
     const contenidoRi = identicas.has(ri) ? origen : base;
-    const documentoRi = identicas.has(ri) ? origen : compartido.has(ri) ? Math.max(0, base - 1) : base;
+    const documentoRi = identicas.has(ri)
+      ? origen
+      : compartido.has(ri)
+        ? Math.max(0, base - 1)
+        : base;
     const nro = ri + (d.nroCorrido === true ? 2 : 1);
     let fila = filaSintetica(ri, contenidoRi, documentoRi, nro, d.columnas ?? 7, i === 0);
     if (d.filasSinDocumento?.includes(ri) === true) {

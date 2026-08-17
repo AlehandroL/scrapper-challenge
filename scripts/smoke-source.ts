@@ -68,7 +68,9 @@ async function main(): Promise<number> {
   const ultima = Math.max(1, Math.ceil(total / 10));
   ok(`total declarado por el sitio: ${total} (${ultima} páginas)`);
   for (const p of primeras) {
-    ok(`página ${p.numero}: ${p.filas.length} filas, data-ri ${p.filas[0]?.registro.indice}–${p.filas.at(-1)?.registro.indice}`);
+    ok(
+      `página ${p.numero}: ${p.filas.length} filas, data-ri ${p.filas[0]?.registro.indice}–${p.filas.at(-1)?.registro.indice}`,
+    );
   }
   const muestra = primeras[0]?.filas[0]?.registro;
   ok(`muestra: ${muestra?.resolucion} · ${muestra?.administrados.join(' / ')}`);
@@ -78,10 +80,13 @@ async function main(): Promise<number> {
   for await (const p of fuente.recorrer({ desde: ultima })) ultimas.push(p);
 
   const final = ultimas[0];
-  ok(`página ${final?.numero}: ${final?.filas.length} filas, data-ri ${final?.filas[0]?.registro.indice}–${final?.filas.at(-1)?.registro.indice}`);
+  ok(
+    `página ${final?.numero}: ${final?.filas.length} filas, data-ri ${final?.filas[0]?.registro.indice}–${final?.filas.at(-1)?.registro.indice}`,
+  );
 
   const esperadasEnUltima = total - (ultima - 1) * 10;
-  const indicesOk = final?.filas.every((f, i) => f.registro.indice === (ultima - 1) * 10 + i) ?? false;
+  const indicesOk =
+    final?.filas.every((f, i) => f.registro.indice === (ultima - 1) * 10 + i) ?? false;
   const sinSolape = !primeras
     .flatMap((p) => p.filas.map((f) => f.registro.id))
     .some((u) => final?.filas.some((f) => f.registro.id === u) ?? false);
@@ -92,16 +97,24 @@ async function main(): Promise<number> {
     ['la página 1 trae 10 filas', primeras[0]?.filas.length === 10],
     ['la página 2 arranca en el data-ri 10', primeras[1]?.filas[0]?.registro.indice === 10],
     ['el salto grande devolvió el offset pedido', indicesOk],
-    [`la última página trae ${esperadasEnUltima} fila(s)`, final?.filas.length === esperadasEnUltima],
+    [
+      `la última página trae ${esperadasEnUltima} fila(s)`,
+      final?.filas.length === esperadasEnUltima,
+    ],
     ['la última página está marcada como última', final?.esUltima === true],
     ['no hay solapamiento con las primeras páginas', sinSolape],
-    ['todas las filas traen identidad', ultimas.every((p) => p.filas.every((f) => f.registro.id !== ''))],
+    [
+      'todas las filas traen identidad',
+      ultimas.every((p) => p.filas.every((f) => f.registro.id !== '')),
+    ],
   ];
   for (const [etiqueta, pasa] of comprobaciones) (pasa ? ok : mal)(etiqueta);
 
   paso('Métricas de la corrida');
   const s = metrics.snapshot();
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+  console.log(
+    `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`,
+  );
   console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
   console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
 
@@ -117,7 +130,10 @@ async function main(): Promise<number> {
 main().then(
   (codigo) => process.exit(codigo),
   (error: unknown) => {
-    console.error('\n✗ El smoke falló:', error instanceof Error ? `${error.name}: ${error.message}` : error);
+    console.error(
+      '\n✗ El smoke falló:',
+      error instanceof Error ? `${error.name}: ${error.message}` : error,
+    );
     process.exit(1);
   },
 );

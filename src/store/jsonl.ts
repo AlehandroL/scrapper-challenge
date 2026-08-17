@@ -177,7 +177,9 @@ export interface LineaJsonl<T> {
  * falla que §6.4 combate en el otro extremo del pipeline. Un archivo
  * inexistente, en cambio, no es un error: es un archivo vacío.
  */
-export async function* readJsonl<T = unknown>(ruta: string): AsyncGenerator<LineaJsonl<T>, void, void> {
+export async function* readJsonl<T = unknown>(
+  ruta: string,
+): AsyncGenerator<LineaJsonl<T>, void, void> {
   if (!existsSync(ruta)) return;
 
   const stream = createReadStream(ruta, { encoding: 'utf8' });

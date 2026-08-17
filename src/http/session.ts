@@ -37,7 +37,13 @@ import {
   type TransportError,
 } from './errors.ts';
 import type { RateLimiter } from './rate-limiter.ts';
-import { RETRY_DEFAULTS, parseRetryAfter, withRetry, type RetryHooks, type RetryOptions } from './retry.ts';
+import {
+  RETRY_DEFAULTS,
+  parseRetryAfter,
+  withRetry,
+  type RetryHooks,
+  type RetryOptions,
+} from './retry.ts';
 
 export interface SessionDeps {
   readonly limiter: RateLimiter;
@@ -65,7 +71,11 @@ export interface Session {
 
   request<T = string>(cfg: AxiosRequestConfig): Promise<AxiosResponse<T>>;
   get(url: string, cfg?: AxiosRequestConfig): Promise<AxiosResponse<string>>;
-  postForm(url: string, campos: FormFields, cfg?: AxiosRequestConfig): Promise<AxiosResponse<string>>;
+  postForm(
+    url: string,
+    campos: FormFields,
+    cfg?: AxiosRequestConfig,
+  ): Promise<AxiosResponse<string>>;
   /** Para las descargas de PDF (§5.4): valida los primeros bytes antes de tocar disco. */
   stream(url: string, cfg?: AxiosRequestConfig): Promise<AxiosResponse<Readable>>;
 
@@ -102,7 +112,11 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
       // El sitio devuelve HTML/XML; el default de axios (JSON) intentaría parsear
       // y rompería. La transformación la hacen las capas de arriba.
       responseType: 'text',
-      transitional: { silentJSONParsing: false, forcedJSONParsing: false, clarifyTimeoutError: true },
+      transitional: {
+        silentJSONParsing: false,
+        forcedJSONParsing: false,
+        clarifyTimeoutError: true,
+      },
       headers: {
         'User-Agent': opts.userAgent ?? USER_AGENT_POR_DEFECTO,
         'Accept-Language': 'es-PE,es;q=0.9,en;q=0.8',
@@ -208,7 +222,8 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
       });
     },
 
-    stream: (url, cfg) => request<Readable>({ ...cfg, method: cfg?.method ?? 'get', url, responseType: 'stream' }),
+    stream: (url, cfg) =>
+      request<Readable>({ ...cfg, method: cfg?.method ?? 'get', url, responseType: 'stream' }),
 
     cookies: (url) => jar.getCookies(url),
     hasCookie: async (url, nombre) => (await jar.getCookies(url)).some((c) => c.key === nombre),

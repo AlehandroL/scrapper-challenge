@@ -8,7 +8,10 @@ import { RateLimiter, type RateLimiterClock } from '../src/http/rate-limiter.ts'
  * minutos de espera. Como el limiter recibe su reloj por inyección, no hace
  * falta ni siquiera `vi.useFakeTimers()`: el control es total y determinista.
  */
-function relojVirtual(): RateLimiterClock & { readonly transcurridoMs: number; readonly siestas: number[] } {
+function relojVirtual(): RateLimiterClock & {
+  readonly transcurridoMs: number;
+  readonly siestas: number[];
+} {
   let t = 0;
   const siestas: number[] = [];
   return {

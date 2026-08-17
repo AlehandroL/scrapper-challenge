@@ -13,7 +13,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { JsonlCorruptoError, openJsonlWriter, readJsonl, readKeys, repararCola } from '../src/store/jsonl.ts';
+import {
+  JsonlCorruptoError,
+  openJsonlWriter,
+  readJsonl,
+  readKeys,
+  repararCola,
+} from '../src/store/jsonl.ts';
 
 let dir: string;
 let ruta: string;
@@ -32,7 +38,9 @@ const leerTodo = async (): Promise<unknown[]> => {
 };
 
 const uuidDe = (v: unknown): string | undefined =>
-  typeof v === 'object' && v !== null && 'uuid' in v && typeof v.uuid === 'string' ? v.uuid : undefined;
+  typeof v === 'object' && v !== null && 'uuid' in v && typeof v.uuid === 'string'
+    ? v.uuid
+    : undefined;
 
 describe('escritura', () => {
   it('escribe una línea por registro y las relee iguales', async () => {
@@ -55,12 +63,20 @@ describe('escritura', () => {
    * dos líneas y el archivo deja de ser JSONL sin que nada avise.
    */
   it('sobrevive a acentos y saltos de línea dentro de un campo', async () => {
-    const registro = { uuid: 'ñ', texto: 'Corporación del Mar S.A.\nAustral Group S.A.A.', sector: 'Pesquería' };
+    const registro = {
+      uuid: 'ñ',
+      texto: 'Corporación del Mar S.A.\nAustral Group S.A.A.',
+      sector: 'Pesquería',
+    };
     const w = openJsonlWriter(ruta);
     w.append(registro);
     w.close();
 
-    expect(readFileSync(ruta, 'utf8').split('\n').filter((l) => l !== '')).toHaveLength(1);
+    expect(
+      readFileSync(ruta, 'utf8')
+        .split('\n')
+        .filter((l) => l !== ''),
+    ).toHaveLength(1);
     expect(await leerTodo()).toEqual([registro]);
   });
 

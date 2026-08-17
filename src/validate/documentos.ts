@@ -64,19 +64,22 @@ export async function revisarDocumentos(
   const forma =
     ctx.invalidas === undefined || ctx.invalidas === 0
       ? ok('manifiesto-invalido', `${numero(entradas.length)} entrada(s) con la forma esperada`)
-      : error('manifiesto-invalido', `${numero(ctx.invalidas)} línea(s) del manifiesto sin la forma esperada`);
+      : error(
+          'manifiesto-invalido',
+          `${numero(ctx.invalidas)} línea(s) del manifiesto sin la forma esperada`,
+        );
 
   if (entradas.length === 0) {
     return [
       forma,
       aviso('manifiesto-vacio', 'el manifiesto no tiene entradas: no se descargó ningún documento'),
-      ...['manifiesto-duplicado', 'manifiesto-huerfano', 'manifiesto-uuid', 'archivo-compartido'].map((c) =>
-        noEvaluable(c, 'sin entradas que revisar'),
-      ),
-      ok(
-        'cobertura-descargas',
-        `0 de ${numero(ctx.conDocumento)} registro(s) con documento`,
-      ),
+      ...[
+        'manifiesto-duplicado',
+        'manifiesto-huerfano',
+        'manifiesto-uuid',
+        'archivo-compartido',
+      ].map((c) => noEvaluable(c, 'sin entradas que revisar')),
+      ok('cobertura-descargas', `0 de ${numero(ctx.conDocumento)} registro(s) con documento`),
       ...['archivo-ausente', 'tamano-distinto', 'hash-distinto'].map((c) =>
         noEvaluable(c, 'sin entradas que revisar'),
       ),
@@ -115,12 +118,19 @@ export async function revisarDocumentos(
 
     duplicados.vacio
       ? ok('manifiesto-duplicado', 'ninguna identidad aparece dos veces')
-      : error('manifiesto-duplicado', `${numero(duplicados.cuenta)} entrada(s) repiten una identidad`, {
-          muestras: duplicados.muestras,
-        }),
+      : error(
+          'manifiesto-duplicado',
+          `${numero(duplicados.cuenta)} entrada(s) repiten una identidad`,
+          {
+            muestras: duplicados.muestras,
+          },
+        ),
 
     huerfanos.vacio
-      ? ok('manifiesto-huerfano', `las ${numero(entradas.length)} entradas tienen su registro en el dataset`)
+      ? ok(
+          'manifiesto-huerfano',
+          `las ${numero(entradas.length)} entradas tienen su registro en el dataset`,
+        )
       : error(
           'manifiesto-huerfano',
           `${numero(huerfanos.cuenta)} entrada(s) apuntan a una identidad que el dataset no tiene`,
@@ -138,7 +148,9 @@ export async function revisarDocumentos(
     ok(
       'archivo-compartido',
       `${numero(porArchivo.size)} archivo(s) para ${numero(entradas.length)} entrada(s)` +
-        (compartidos === 0 ? '' : `; ${numero(compartidos)} lo comparten dos registros y se bajó una vez`),
+        (compartidos === 0
+          ? ''
+          : `; ${numero(compartidos)} lo comparten dos registros y se bajó una vez`),
     ),
 
     ok(
@@ -159,7 +171,9 @@ async function revisarDisco(
 ): Promise<Hallazgo[]> {
   if (sonda === undefined) {
     const motivo = 'no se pudo mirar el disco: la carpeta de descargas no existe';
-    return ['archivo-ausente', 'tamano-distinto', 'hash-distinto'].map((c) => noEvaluable(c, motivo));
+    return ['archivo-ausente', 'tamano-distinto', 'hash-distinto'].map((c) =>
+      noEvaluable(c, motivo),
+    );
   }
 
   const ausentes = new Contador();
@@ -178,7 +192,9 @@ async function revisarDisco(
 
     for (const entrada of grupo) {
       if (entrada.bytes !== disco.bytes) {
-        tamanos.anotar(`${archivo}: manifiesto ${numero(entrada.bytes)} B, disco ${numero(disco.bytes)} B`);
+        tamanos.anotar(
+          `${archivo}: manifiesto ${numero(entrada.bytes)} B, disco ${numero(disco.bytes)} B`,
+        );
       }
       if (disco.sha256 !== undefined && entrada.sha256 !== disco.sha256) hashes.anotar(archivo);
     }
@@ -187,24 +203,48 @@ async function revisarDisco(
 
   return [
     ausentes.vacio
-      ? ok('archivo-ausente', `los ${numero(porArchivo.size)} archivo(s) del manifiesto están en disco`)
-      : error('archivo-ausente', `${numero(ausentes.cuenta)} archivo(s) del manifiesto no están en disco`, {
-          muestras: ausentes.muestras,
-        }),
+      ? ok(
+          'archivo-ausente',
+          `los ${numero(porArchivo.size)} archivo(s) del manifiesto están en disco`,
+        )
+      : error(
+          'archivo-ausente',
+          `${numero(ausentes.cuenta)} archivo(s) del manifiesto no están en disco`,
+          {
+            muestras: ausentes.muestras,
+          },
+        ),
 
     tamanos.vacio
-      ? ok('tamano-distinto', `${numero(presentes)} archivo(s) con el tamaño que el manifiesto declara`)
-      : error('tamano-distinto', `${numero(tamanos.cuenta)} archivo(s) con un tamaño distinto al declarado`, {
-          muestras: tamanos.muestras,
-        }),
+      ? ok(
+          'tamano-distinto',
+          `${numero(presentes)} archivo(s) con el tamaño que el manifiesto declara`,
+        )
+      : error(
+          'tamano-distinto',
+          `${numero(tamanos.cuenta)} archivo(s) con un tamaño distinto al declarado`,
+          {
+            muestras: tamanos.muestras,
+          },
+        ),
 
     hasheados === 0
-      ? noEvaluable('hash-distinto', 'la sonda no recalculó hashes: usar --hash para releer los archivos')
+      ? noEvaluable(
+          'hash-distinto',
+          'la sonda no recalculó hashes: usar --hash para releer los archivos',
+        )
       : hashes.vacio
-        ? ok('hash-distinto', `${numero(hasheados)} archivo(s) con el sha256 que el manifiesto declara`)
-        : error('hash-distinto', `${numero(hashes.cuenta)} archivo(s) con un sha256 distinto al declarado`, {
-            muestras: hashes.muestras,
-          }),
+        ? ok(
+            'hash-distinto',
+            `${numero(hasheados)} archivo(s) con el sha256 que el manifiesto declara`,
+          )
+        : error(
+            'hash-distinto',
+            `${numero(hashes.cuenta)} archivo(s) con un sha256 distinto al declarado`,
+            {
+              muestras: hashes.muestras,
+            },
+          ),
   ];
 }
 
@@ -214,7 +254,8 @@ async function revisarDisco(
  * arreglar un archivo.
  */
 function colaDeFallos(pendientes: number | undefined): Hallazgo {
-  if (pendientes === undefined) return noEvaluable('dlq-pendientes', 'la cola de fallos no se pudo leer');
+  if (pendientes === undefined)
+    return noEvaluable('dlq-pendientes', 'la cola de fallos no se pudo leer');
   if (pendientes === 0) return ok('dlq-pendientes', 'la cola de fallos está vacía');
   return aviso(
     'dlq-pendientes',

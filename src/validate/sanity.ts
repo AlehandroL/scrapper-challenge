@@ -24,7 +24,16 @@
 
 import type { RegistroBase } from '../sources/types.ts';
 
-import { Contador, MAX_MUESTRAS, aviso, error, noEvaluable, numero, ok, type Hallazgo } from './informe.ts';
+import {
+  Contador,
+  MAX_MUESTRAS,
+  aviso,
+  error,
+  noEvaluable,
+  numero,
+  ok,
+  type Hallazgo,
+} from './informe.ts';
 
 /**
  * Convierte una línea cruda en registro, o devuelve el motivo del rechazo.
@@ -112,7 +121,8 @@ export class RevisionDataset<R extends RegistroBase> {
     if (this.#ids.has(resultado.id)) this.#idsRepetidos.anotar(resultado.id);
     else this.#ids.add(resultado.id);
 
-    if (this.#indices.has(resultado.indice)) this.#indicesRepetidos.anotar(String(resultado.indice));
+    if (this.#indices.has(resultado.indice))
+      this.#indicesRepetidos.anotar(String(resultado.indice));
     else this.#indices.add(resultado.indice);
 
     const esperada = Math.floor(resultado.indice / this.#opciones.pageSize) + 1;
@@ -163,7 +173,10 @@ export class RevisionDataset<R extends RegistroBase> {
           ),
 
       this.#incoherentes.vacio
-        ? ok('pagina-incoherente', `«pagina» concuerda con «indice» en las ${numero(this.#validos)} filas`)
+        ? ok(
+            'pagina-incoherente',
+            `«pagina» concuerda con «indice» en las ${numero(this.#validos)} filas`,
+          )
         : error(
             'pagina-incoherente',
             `${numero(this.#incoherentes.cuenta)} fila(s) con la página desalineada de su posición`,

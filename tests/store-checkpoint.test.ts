@@ -74,8 +74,14 @@ describe('ida y vuelta', () => {
   it.each([
     ['JSON roto', '{no es json'],
     ['campos faltantes', '{"fuente":"oefa"}'],
-    ['tipos equivocados', '{"fuente":"oefa","tarea":"scrape","pageSize":"diez","total":1,"ultimaPagina":1,"registros":1,"actualizadoEn":"x"}'],
-    ['sin la tarea que lo escribió', '{"fuente":"oefa","pageSize":10,"total":1,"ultimaPagina":1,"registros":1,"actualizadoEn":"x"}'],
+    [
+      'tipos equivocados',
+      '{"fuente":"oefa","tarea":"scrape","pageSize":"diez","total":1,"ultimaPagina":1,"registros":1,"actualizadoEn":"x"}',
+    ],
+    [
+      'sin la tarea que lo escribió',
+      '{"fuente":"oefa","pageSize":10,"total":1,"ultimaPagina":1,"registros":1,"actualizadoEn":"x"}',
+    ],
   ])('un checkpoint con %s lanza en vez de devolver undefined', (_caso, contenido) => {
     writeFileSync(ruta, contenido);
     expect(() => leerCheckpoint(ruta)).toThrow(CheckpointInvalidoError);
@@ -122,11 +128,14 @@ describe('planificarReanudacion', () => {
     expect(plan.mensaje).toContain('13');
   });
 
-  it.each([{ fuente: 'pj' }, { tarea: 'scrape' }])('un checkpoint ajeno (%o) se ignora y se avisa', (ajeno) => {
-    const plan = planificarReanudacion(cp(ajeno), pedido);
-    expect(plan.desde).toBeUndefined();
-    expect(plan.mensaje).toContain('se ignora');
-  });
+  it.each([{ fuente: 'pj' }, { tarea: 'scrape' }])(
+    'un checkpoint ajeno (%o) se ignora y se avisa',
+    (ajeno) => {
+      const plan = planificarReanudacion(cp(ajeno), pedido);
+      expect(plan.desde).toBeUndefined();
+      expect(plan.mensaje).toContain('se ignora');
+    },
+  );
 
   /**
    * Sin este caso, correr `--hasta 3` dos veces seguidas descargaría el dataset
@@ -193,8 +202,9 @@ describe('planificarReanudacion sin tamaño de página conocido', () => {
   });
 
   it('el --hasta sigue mandando sobre un checkpoint sin tamaño de página', () => {
-    expect(planificarReanudacion(cpPj({ ultimaPagina: 3 }), { ...derivado, hasta: 3 }).nadaPendiente)
-      .toContain('3');
+    expect(
+      planificarReanudacion(cpPj({ ultimaPagina: 3 }), { ...derivado, hasta: 3 }).nadaPendiente,
+    ).toContain('3');
   });
 });
 
@@ -209,14 +219,18 @@ describe('planificarReanudacion con el recorrido declarado completo', () => {
   const pedido = { fuente: 'oefa', tarea: 'download', pageSize: 10 };
 
   it('no hay nada pendiente aunque --hasta pida más páginas de las que hay', () => {
-    const plan = planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), { ...pedido, hasta: 200 });
+    const plan = planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), {
+      ...pedido,
+      hasta: 200,
+    });
 
     expect(plan.nadaPendiente).toContain('176');
     expect(plan.desde).toBeUndefined();
   });
 
   it('un --desde explícito sigue mandando sobre el checkpoint completo', () => {
-    expect(planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), { ...pedido, desde: 5 }))
-      .toEqual({ desde: 5 });
+    expect(
+      planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), { ...pedido, desde: 5 }),
+    ).toEqual({ desde: 5 });
   });
 });
