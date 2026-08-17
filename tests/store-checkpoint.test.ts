@@ -148,3 +148,75 @@ describe('planificarReanudacion', () => {
     expect(planificarReanudacion(cp({ ultimaPagina: 3 }), { ...pedido, hasta: 9 }).desde).toBe(4);
   });
 });
+
+/**
+ * La reanudación de una fuente que **no publica su tamaño de página**.
+ *
+ * El Poder Judicial lo deriva en runtime, así que los CLIs mandan `pageSize: 0`
+ * —«lo deriva la corrida»—. Con eso, `Math.ceil(total / 0)` daba `Infinity`: la
+ * guarda de «se completaron las N páginas» no disparaba nunca y repetir un
+ * comando terminado devolvía un `desde` mayor que la última página. La fuente lo
+ * rechazaba con `RangoInvalidoError` y el CLI salía con código 2, o sea que la
+ * corrida más limpia posible —una que terminó bien— se reportaba como error de
+ * uso. Y el checkpoint no se borra en ese camino, así que no se curaba solo.
+ *
+ * El arreglo no es acotar la división: es dejar de derivar por aritmética un
+ * hecho que la fuente ya declara en `Pagina.esUltima`.
+ */
+describe('planificarReanudacion sin tamaño de página conocido', () => {
+  const derivado = { fuente: 'pj', tarea: 'scrape', pageSize: 0 };
+  const cpPj = (extra: Partial<Checkpoint> = {}): Checkpoint =>
+    cp({ fuente: 'pj', tarea: 'scrape', pageSize: 0, total: 100, ...extra });
+
+  it('una corrida completa no tiene nada pendiente', () => {
+    const plan = planificarReanudacion(cpPj({ ultimaPagina: 10, completo: true }), derivado);
+
+    expect(plan.nadaPendiente).toContain('10');
+    expect(plan.desde).toBeUndefined();
+  });
+
+  it('una corrida cortada retoma donde quedó', () => {
+    const plan = planificarReanudacion(cpPj({ ultimaPagina: 4, completo: false }), derivado);
+
+    expect(plan.desde).toBe(5);
+    expect(plan.nadaPendiente).toBeUndefined();
+  });
+
+  /** El caso que producía el `Infinity`: sin `completo` no se puede saber, y lo
+   *  correcto es retomar —a lo sumo se repite una página— y nunca inventar un
+   *  `desde` derivado de una división por cero. */
+  it('un checkpoint viejo, sin el campo, retoma en vez de romperse', () => {
+    const plan = planificarReanudacion(cpPj({ ultimaPagina: 10 }), derivado);
+
+    expect(plan.desde).toBe(11);
+    expect(Number.isFinite(plan.desde ?? 0)).toBe(true);
+  });
+
+  it('el --hasta sigue mandando sobre un checkpoint sin tamaño de página', () => {
+    expect(planificarReanudacion(cpPj({ ultimaPagina: 3 }), { ...derivado, hasta: 3 }).nadaPendiente)
+      .toContain('3');
+  });
+});
+
+/**
+ * `completo` gana sobre `--hasta`, y no al revés.
+ *
+ * Pedir `--hasta 200` sobre un dataset de 176 páginas no vuelve pendientes las
+ * 24 que no existen: sin esta precedencia, el plan devolvía `desde: 177` y la
+ * fuente lo rechazaba igual que en el caso de arriba.
+ */
+describe('planificarReanudacion con el recorrido declarado completo', () => {
+  const pedido = { fuente: 'oefa', tarea: 'download', pageSize: 10 };
+
+  it('no hay nada pendiente aunque --hasta pida más páginas de las que hay', () => {
+    const plan = planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), { ...pedido, hasta: 200 });
+
+    expect(plan.nadaPendiente).toContain('176');
+    expect(plan.desde).toBeUndefined();
+  });
+
+  it('un --desde explícito sigue mandando sobre el checkpoint completo', () => {
+    expect(planificarReanudacion(cp({ ultimaPagina: 176, completo: true }), { ...pedido, desde: 5 }))
+      .toEqual({ desde: 5 });
+  });
+});

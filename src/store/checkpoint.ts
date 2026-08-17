@@ -38,6 +38,17 @@ export interface Checkpoint {
   readonly total: number;
   /** 1-based, **completada**: la corrida siguiente empieza en la que sigue. */
   readonly ultimaPagina: number;
+  /**
+   * Si `ultimaPagina` fue la última del recorrido, según la fuente.
+   *
+   * Lo dice `Pagina.esUltima`, que el adapter calcula con el tamaño de página
+   * **real**. Guardarlo evita tener que re-derivarlo acá dividiendo `total` por
+   * un `pageSize` que no todas las fuentes publican.
+   *
+   * Opcional: los checkpoints escritos antes de que existiera este campo siguen
+   * siendo válidos y se resuelven por la aritmética de respaldo.
+   */
+  readonly completo?: boolean;
   /** Acumulado de la corrida, para el reporte. No participa de la validación. */
   readonly registros: number;
   readonly actualizadoEn: string;
@@ -131,10 +142,12 @@ export interface PlanReanudacion {
 /**
  * Desde qué página arrancar, mirando el checkpoint.
  *
- * Los dos casos de «nada pendiente» son los que evitan que repetir un comando
- * haga algo distinto la segunda vez. Sin el primero, correr `--hasta 3` dos veces
- * seguidas recorrería el dataset entero la segunda: el checkpoint diría «vas por
- * la 3» y nadie estaría mirando el `--hasta`.
+ * Los tres casos de «nada pendiente» son los que evitan que repetir un comando
+ * haga algo distinto la segunda vez. Sin el del `--hasta`, correr `--hasta 3` dos
+ * veces seguidas recorrería el dataset entero la segunda: el checkpoint diría
+ * «vas por la 3» y nadie estaría mirando el `--hasta`. Sin el de `completo`,
+ * repetir una corrida ya terminada salía por error en vez de por «no hay nada
+ * que hacer».
  *
  * Es política, no estado, y por eso es una función pura que se puede probar sin
  * tocar el disco. Los dos CLIs la comparten: que `scrape` y `download` reanuden
@@ -151,13 +164,38 @@ export function planificarReanudacion(
   }
 
   const desde = cp.ultimaPagina + 1;
-  const ultima = Math.max(1, Math.ceil(cp.total / pedido.pageSize));
+
+  // Que el recorrido haya terminado lo dice la fuente —`Pagina.esUltima`—, no
+  // una división. Derivarlo de `total / pageSize` exige conocer el tamaño de
+  // página, y hay fuentes que no lo publican: el Poder Judicial lo deriva en
+  // runtime y hasta acá llegaba como `0`, así que `ultima` daba `Infinity` y la
+  // guarda de abajo no disparaba nunca.
+  //
+  // El síntoma no era un rearranque de más, que sería tolerable: el `desde`
+  // resultante superaba la última página, la fuente lo rechazaba con
+  // `RangoInvalidoError` y el CLI salía con código 2 —«uso incorrecto»— por
+  // repetir un comando que la vez anterior había terminado bien. Y como el
+  // checkpoint no se borra en ese camino, se repetía en cada corrida.
+  //
+  // Va **antes** que `--hasta`: un recorrido terminado no tiene nada pendiente,
+  // pida lo que pida el usuario. Pedir `--hasta 200` sobre un dataset de 176
+  // páginas no vuelve pendientes las 24 que no existen.
+  if (cp.completo === true) {
+    return { nadaPendiente: `el checkpoint dice que la página ${cp.ultimaPagina} fue la última` };
+  }
 
   if (pedido.hasta !== undefined && desde > pedido.hasta) {
     return { nadaPendiente: `el checkpoint ya cubre hasta la página ${cp.ultimaPagina}` };
   }
-  if (pedido.hasta === undefined && desde > ultima) {
-    return { nadaPendiente: `el checkpoint dice que se completaron las ${ultima} páginas` };
+
+  // Respaldo para los checkpoints escritos antes de que existiera `completo`, y
+  // solo cuando el tamaño de página se conoce: dividir por cero da `Infinity`,
+  // que es exactamente el bug que esta guarda evita.
+  if (pedido.hasta === undefined && pedido.pageSize > 0) {
+    const ultima = Math.max(1, Math.ceil(cp.total / pedido.pageSize));
+    if (desde > ultima) {
+      return { nadaPendiente: `el checkpoint dice que se completaron las ${ultima} páginas` };
+    }
   }
 
   return { desde, totalEsperado: cp.total, mensaje: `checkpoint: se retoma en la página ${desde}` };
@@ -172,6 +210,8 @@ function comoCheckpoint(valor: unknown): Checkpoint | undefined {
   if (typeof v.tarea !== 'string' || v.tarea === '') return undefined;
   if (!entero(v.pageSize) || !entero(v.total) || !entero(v.ultimaPagina) || !entero(v.registros)) return undefined;
   if (typeof v.actualizadoEn !== 'string') return undefined;
+  // Ausente es válido —checkpoint viejo—; presente y no booleano, no.
+  if (v.completo !== undefined && typeof v.completo !== 'boolean') return undefined;
 
   return v as unknown as Checkpoint;
 }

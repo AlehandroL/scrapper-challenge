@@ -16,7 +16,13 @@ import { withRetry } from '../src/http/retry.ts';
 import { silentLogger } from '../src/obs/logger.ts';
 import { Metrics } from '../src/obs/metrics.ts';
 import { pageCommand } from '../src/jsf/datatable.ts';
-import { BootstrapError, NotPartialResponseError, ViewExpiredError, isRecoverable } from '../src/jsf/errors.ts';
+import {
+  BootstrapError,
+  NotPartialResponseError,
+  ViewExpiredError,
+  ViewNotReadyError,
+  isRecoverable,
+} from '../src/jsf/errors.ts';
 import { JsfView, type JsfViewOptions } from '../src/jsf/view.ts';
 import { RUTA_VISTA, startJsfServer, type JsfTestServer } from './helpers/jsf-server.ts';
 
@@ -281,5 +287,33 @@ describe('la capa de transporte no reintenta errores de protocolo', () => {
       }),
     ).rejects.toThrow(ViewExpiredError);
     expect(llamadas).toBe(1);
+  });
+});
+
+/**
+ * La vista que todavía no está lista falla por su nombre, y no de relleno.
+ *
+ * `ViewNotReadyError` existía sin que ningún test lo disparara, que es la forma
+ * más cómoda de que una guarda deje de funcionar sin que nadie se entere. Y era
+ * justo lo que estaba pasando: quien construía una página necesitaba un `string`
+ * y el getter devuelve `string | undefined`, así que la conversión se hacía con
+ * un `?? ''` — y el string vacío **no es nullish**, con lo cual se colaba por la
+ * guarda y salía un POST con `javax.faces.ViewState` vacío. El portal contesta
+ * eso con un `200` y la página re-renderizada: cero filas, ninguna excepción.
+ */
+describe('el token exigido', () => {
+  it('sin bootstrap, pedir el ViewState falla nombrando la operación', () => {
+    const v = vista();
+
+    expect(() => v.viewStateRequerido('construirPagina')).toThrow(ViewNotReadyError);
+    expect(() => v.viewStateRequerido('construirPagina')).toThrow(/construirPagina/);
+  });
+
+  it('después del bootstrap devuelve el mismo token que el getter, y no vacío', async () => {
+    const v = vista();
+    await v.bootstrap();
+
+    expect(v.viewStateRequerido('construirPagina')).toBe(v.viewState);
+    expect(v.viewStateRequerido('construirPagina')).not.toBe('');
   });
 });

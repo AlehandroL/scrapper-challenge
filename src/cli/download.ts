@@ -41,6 +41,7 @@ import { loadConfig } from '../config.ts';
 import { CircuitBreaker } from '../http/circuit-breaker.ts';
 import { AccessDeniedError, CircuitOpenError, TransportError } from '../http/errors.ts';
 import { RateLimiter } from '../http/rate-limiter.ts';
+import { RETRY_DEFAULTS } from '../http/retry.ts';
 import { createSession } from '../http/session.ts';
 import type { JsfRequest } from '../jsf/commands.ts';
 import { JsfView } from '../jsf/view.ts';
@@ -709,6 +710,11 @@ export async function main(argv: readonly string[]): Promise<number> {
       breaker: new CircuitBreaker(),
       metrics,
       logger,
+      // Sin esta línea `HTTP_MAX_RETRY_AFTER_MS` es una perilla documentada que no
+      // hace nada: `createSession` cae a `RETRY_DEFAULTS` y el tope queda clavado
+      // en 120 s. Configurar algo y que el proceso lo ignore en silencio es peor
+      // que no poder configurarlo, porque además da confianza.
+      retry: { ...RETRY_DEFAULTS, maxRetryAfterMs: config.HTTP_MAX_RETRY_AFTER_MS },
     },
     {
       timeoutMs: config.HTTP_TIMEOUT_MS,
@@ -801,6 +807,7 @@ export async function main(argv: readonly string[]): Promise<number> {
         pageSize: descriptor.pageSize ?? 0,
         total: pagina.total,
         ultimaPagina: pagina.numero,
+        completo: pagina.esUltima,
         registros: resumen.registros,
         actualizadoEn: new Date().toISOString(),
       });

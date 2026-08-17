@@ -112,6 +112,17 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
         ? {}
         : // `proxy: false` desactiva el manejo propio de axios: con un agent
           // explícito, dejar los dos activos hace que se pisen.
+          //
+          // El mismo `HttpsProxyAgent` cubre las dos ranuras, y para un target
+          // `http://` eso es incorrecto: `HttpsProxyAgent` siempre emite
+          // `CONNECT`, mientras que un target sin TLS se pide al proxy con URI
+          // absoluta —lo que hace `HttpProxyAgent`, que no es dependencia de
+          // este proyecto—. Hoy no muerde porque los dos portales son HTTPS,
+          // pero el `maxRedirects: 5` de arriba deja abierto el vector de un
+          // redirect https→http. Queda anotado y no arreglado a propósito:
+          // agregar una dependencia para un camino que nunca corrió contra un
+          // proxy real —ver la limitación 4 del README— compra menos que
+          // decirlo.
           { httpAgent: agent, httpsAgent: agent, proxy: false as const }),
     }),
   );

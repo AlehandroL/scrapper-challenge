@@ -84,8 +84,9 @@ export interface OpcionesGuardado {
  * Escribe `origen` en `destino` y devuelve cuánto pesó y su hash.
  *
  * Lanza `ArchivoInvalidoError` si el magic o el tamaño no dan. En cualquier
- * fallo —también los de red a mitad de cuerpo— destruye el stream y borra el
- * temporal, de modo que el destino nunca existe a medias.
+ * fallo borra el temporal —también en el del `rename` final, que corre fuera del
+ * `try` y era el único que dejaba un `.parcial` huérfano—, y si el cuerpo quedó a
+ * medias destruye además el stream. El destino nunca existe a medias.
  *
  * **Destruir el stream no es opcional**: §5.6 lo anotó al implementar el bloque
  * 2. Un cuerpo en streaming que no se drena deja el socket colgado; unos pocos
@@ -148,7 +149,23 @@ export async function guardarStream(
     }
   }
 
-  renameSync(temporal, destino);
+  // El `rename` va fuera del `try` de arriba a propósito: renombrar con el
+  // descriptor todavía abierto falla en Windows, así que el `closeSync` del
+  // `finally` tiene que haber corrido. Pero entonces queda fuera de su limpieza,
+  // y un `rename` que falla —permisos del directorio, el destino ocupado, el
+  // directorio borrado a mitad— dejaba el temporal huérfano. No es basura
+  // inocua: para ese momento el contenido ya está completo, validado y
+  // `fsync`-eado, así que el huérfano parece la evidencia de un corte y es
+  // exactamente lo contrario. El error se relanza tal cual —Node ya nombra el
+  // código y las dos rutas— porque quien decide qué hacer con un fallo de disco
+  // es el llamador.
+  try {
+    renameSync(temporal, destino);
+  } catch (error) {
+    rmSync(temporal, { force: true });
+    throw error;
+  }
+
   return { bytes, sha256: hash.digest('hex') };
 }
 

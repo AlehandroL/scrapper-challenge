@@ -19,7 +19,7 @@ secundario — ver [limitaciones conocidas](#limitaciones-conocidas).
 | **Dataset** | [`data/oefa.jsonl`](data/oefa.jsonl) — 1.749 registros, de 1.753 filas recorridas en 176 páginas |
 | **Documentos** | [`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl) — 30 PDFs, 232,6 MB, con tamaño y `sha256` |
 | **Corrida del dataset** | 177 requests a 1 req/s, **cero 429 y cero reintentos**, ~6 min |
-| **Suite** | 553 tests **sin red**, ~2 s, contra Node 20, 22 y 24 en CI |
+| **Suite** | 572 tests **sin red**, ~2 s, contra Node 20, 22 y 24 en CI |
 | **Sanity checks** | `npm run validate` — 25 chequeos, 0 errores y 2 avisos conocidos sobre lo entregado |
 
 ## Instalación
@@ -46,7 +46,7 @@ reintenta con `npm run retry-failed`.
 Verificación sin red:
 
 ```bash
-npm test          # 553 tests, ~2 s
+npm test          # 572 tests, ~2 s
 npm run typecheck # tsc --noEmit
 ```
 
@@ -63,7 +63,7 @@ src/
   store/      JSONL · archivos · cola de fallos · checkpoint
   validate/   sanity checks, sin I/O
   obs/        logging · métricas
-tests/        553 tests, ninguno toca la red
+tests/        572 tests, ninguno toca la red
 fixtures/     markup real de los dos portales, versionado
 scripts/      captura de fixtures, smokes contra el sitio vivo, diagnóstico de acceso
 docs/         el proceso y la bitácora
@@ -79,7 +79,7 @@ corrida; el detalle está en [`docs/proceso.md`](docs/proceso.md#arquitectura).
 
 | Comando | Red | Qué hace |
 |---|---|---|
-| `npm test` | no | La suite completa: 553 tests, ~2 s |
+| `npm test` | no | La suite completa: 572 tests, ~2 s |
 | `npm run typecheck` | no | `tsc --noEmit` |
 | `npm run scrape` | sí | Recorre la fuente y escribe el dataset JSONL |
 | `npm run download` | sí | Recorre y baja los documentos intercalado, con manifiesto y cola de fallos |
@@ -255,6 +255,13 @@ y `https-proxy-agent` instalado, pero no se contrató ninguno. Cuando se use, la
 **fija durante toda la vida de la sesión**: la rotación por request —default de los
 proveedores residenciales— es incompatible con JSF, porque el `JSESSIONID` queda asociado a
 un nodo y cambiar de IP provoca expiración inmediata.
+
+Y una limitación conocida dentro de la limitación: el mismo `HttpsProxyAgent` se monta como
+`httpAgent` y como `httpsAgent`. Para un target `http://` corresponde `HttpProxyAgent` —el
+primero siempre emite `CONNECT`—, así que un proxy hacia un destino sin TLS, o un redirect
+https→http, no está cubierto. No se arregló porque agregar una dependencia para un camino
+que nunca se ejercitó compra menos que declararlo; queda anotado también en
+[`src/http/session.ts`](src/http/session.ts).
 
 ## Documentación
 

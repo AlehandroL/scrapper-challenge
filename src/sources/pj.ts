@@ -520,7 +520,7 @@ class PjSource implements Fuente<RegistroPj> {
       filas,
       total: this.#total,
       esUltima: numero === ultima,
-      viewState: this.#view.viewState ?? '',
+      viewState: this.#view.viewStateRequerido('construirPagina'),
       generacion: this.#view.snapshot().generation,
     };
   }

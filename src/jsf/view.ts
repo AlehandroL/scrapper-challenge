@@ -133,6 +133,23 @@ export class JsfView {
     return this.#viewState;
   }
 
+  /**
+   * El token vigente, o `ViewNotReadyError` si no hay.
+   *
+   * Existe para que quien necesita un `string` no tenga que inventarse un valor
+   * de relleno. El getter de arriba devuelve `string | undefined` —correcto: la
+   * vista puede no estar lista— y quien construye una página necesita un
+   * `string`. Sin esto la conversión era un `?? ''`, y el string vacío **no es
+   * nullish**: se colaba entero por la guarda de `prepareCommand` y salía un POST
+   * con `javax.faces.ViewState=` vacío. El portal contesta eso con un `200` y la
+   * página re-renderizada, que es el modo de falla que el repo persigue en todas
+   * partes. Un token faltante tiene que romper acá, con el nombre de la
+   * operación, y no tres capas más abajo disfrazado de respuesta buena.
+   */
+  viewStateRequerido(operacion: string): string {
+    return this.#requireViewState(operacion);
+  }
+
   /** El cuerpo de la última página completa: bootstrap, `recover()` o `adoptarPagina()`. */
   get html(): string | undefined {
     return this.#html;

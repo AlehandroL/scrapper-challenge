@@ -29,6 +29,21 @@ export class Metrics {
   fallidos = 0;
   reintentos = 0;
 
+  /**
+   * La muestra completa, sin podar, **a propósito**.
+   *
+   * Crece sin cota, lo cual sería un problema en un proceso que no termina. Este
+   * termina: hay una instancia por corrida de CLI y una muestra por intento HTTP
+   * que recibió respuesta. La corrida real del dataset fueron 177; una de
+   * descargas completa serían ~1.900. Del orden de 15 KB, y `snapshot()` se
+   * llama una vez al final, nunca dentro del bucle de páginas.
+   *
+   * Acotarla con reservoir sampling o con buckets costaría poco código, pero
+   * volvería **aproximados** los percentiles: `percentil()` indexa el array
+   * ordenado, así que hoy el p50 y el p95 son exactos. Cambiar precisión real por
+   * un problema hipotético es un mal negocio, y esta nota es más barata que
+   * descubrirlo de nuevo dentro de seis meses.
+   */
   readonly #latencias: number[] = [];
   readonly #contadores = new Map<string, number>();
 
