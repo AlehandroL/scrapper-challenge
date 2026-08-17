@@ -122,8 +122,10 @@ reutilizable contra cualquier fuente nueva.
 **2. Separar el problema de acceso del problema de protocolo.** El 80 % del trabajo técnico
 —`ViewState`, partial-response, paginación, descargas, rate limiting— es el mismo y no
 requiere IP peruana. Bloquearse esperando resolver el acceso antes de empezar a programar es
-el error de secuenciación más caro disponible. Se buscó un portal con el mismo framework y
-acceso abierto: `publico.oefa.gob.pe`.
+el error de secuenciación más caro disponible. El enunciado ofrece un sitio alternativo sin
+VPN «para desarrollo/pruebas», `publico.oefa.gob.pe`; verificar que corre el mismo framework
+—Mojarra— confirmó que ese 80 % no depende del acceso, y el trabajo arrancó ahí el primer
+día en vez de esperar a resolverlo.
 
 **3. Replicar tres requests a mano antes de escribir una línea de código.** El GET inicial,
 un POST de paginación y una descarga de PDF, con `curl`, hasta obtener respuestas idénticas
