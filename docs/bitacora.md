@@ -5,8 +5,17 @@ etapa, qué supuestos refutó el sitio, y qué decisión salió de ahí. Se cons
 porque el enunciado dice que descubrir la estructura del portal *es parte del desafío*, y
 el proceso vale más que el resultado limpio.
 
-El [README](../README.md) es la entrega: qué hace, cómo se corre y qué produjo. Esto es
-cómo se llegó hasta ahí.
+Tres documentos, tres alcances: el [README](../README.md) es la entrega —qué hace, cómo se
+corre y qué produjo—; [`proceso.md`](proceso.md) es el resumen del descubrimiento del
+protocolo y de la arquitectura; esto es el detalle cronológico, bloque a bloque.
+
+> **Sobre el sitio principal.** Esta bitácora se escribió mientras
+> `jurisprudencia.pj.gob.pe` se trataba como el objetivo y `publico.oefa.gob.pe` como el
+> sitio de desarrollo. La entrega final invirtió ese encuadre: **OEFA es el sitio
+> principal** —es el que se recorrió entero y del que salió el dataset— y el Poder Judicial
+> quedó como fuente secundaria, porque no se contrató VPN peruana. Los bloques de abajo
+> conservan el vocabulario original a propósito: reescribirlos borraría el orden en que las
+> cosas efectivamente se supieron, que es justamente lo que este documento registra.
 
 > **Sobre las referencias «§».** Apuntan al documento de estrategia con el que se planificó
 > el trabajo, que vive en `planes/` y **no está versionado** — es material de planificación

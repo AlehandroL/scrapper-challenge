@@ -1,7 +1,8 @@
 # Fixtures — jurisprudencia.pj.gob.pe
 
-Markup real del portal objetivo, capturado **desde el archivo web** porque el
-sitio responde `403` desde Chile (§2.2). Son la base de los tests del adapter del
+Markup real del **portal secundario** del proyecto, capturado desde el archivo
+web porque el sitio responde `403` sin salida de red peruana (§2.2) y esta
+entrega tomó OEFA como sitio principal. Son la base de los tests del adapter del
 Poder Judicial y, sobre todo, la evidencia que corrigió cuatro supuestos sobre
 los que ese adapter se iba a escribir.
 

@@ -1,10 +1,14 @@
 /**
  * smoke-pj.ts — Ejercita el adapter del Poder Judicial contra el sitio vivo.
  *
- * Este script existe por una razón concreta: **el adapter del bloque 7 no se
- * pudo correr contra su fuente.** El portal responde `403` desde Chile y no se
- * contrató proxy (§3.3). Escribir el adapter igual era lo que correspondía;
- * dejarlo sin una forma de ejercitarlo, no.
+ * Este script existe por una razón concreta: **el adapter de la fuente
+ * secundaria no se pudo correr contra su sitio.** El portal exige salida de red
+ * peruana y esta entrega tomó OEFA como sitio principal en vez de contratar una
+ * VPN (§3.3). Escribir el adapter igual era lo que correspondía; dejarlo sin una
+ * forma de ejercitarlo, no.
+ *
+ * **Requiere salida peruana.** Desde cualquier otra red devuelve `2` y dice
+ * «BLOQUEADO», que es la respuesta correcta y no un fallo del adapter.
  *
  * Es el mismo criterio con el que §2.3 entregó `check-access.sh`: cuando algo no
  * se puede cerrar desde acá, se entrega el comando que lo cierra desde donde sí
