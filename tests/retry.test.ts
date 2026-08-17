@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AccessDeniedError,
   CircuitOpenError,
+  HostUnreachableError,
   NetworkError,
   ServerUnavailableError,
   ThrottledError,
@@ -168,6 +169,39 @@ describe('withRetry', () => {
 
     expect(fn).toHaveBeenCalledTimes(3);
     expect(esperas).toEqual([250, 500]);
+  });
+
+  it('no reintenta un host que no acepta conexiones', async () => {
+    const { esperas, sleep } = siestaFalsa();
+    const fn = vi.fn(async () => {
+      throw new HostUnreachableError(CTX, 'ECONNREFUSED', 'connect ECONNREFUSED 10.0.0.1:443');
+    });
+
+    // Un servicio caído no vuelve en 400 ms: tres viajes ahí no son recuperación,
+    // son ruido con forma de reintento.
+    await expect(withRetry(fn, RETRY_DEFAULTS, { sleep })).rejects.toBeInstanceOf(
+      HostUnreachableError,
+    );
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(esperas).toEqual([]);
+  });
+
+  it('lo decide el presupuesto y no la clase: subirlo alcanza para reintentar', async () => {
+    const { esperas, sleep } = siestaFalsa();
+    const fn = vi.fn(async () => {
+      throw new HostUnreachableError(CTX, 'ECONNREFUSED', 'connect ECONNREFUSED 10.0.0.1:443');
+    });
+
+    // La política vive en `RETRY_DEFAULTS.unreachable`, así que absorber el
+    // rebote de un balanceador es cambiar un número y no editar la taxonomía.
+    const opts = { ...RETRY_DEFAULTS, unreachable: { maxAttempts: 3, baseMs: 2_000 } };
+    await expect(withRetry(fn, opts, { sleep, rng: () => 1 })).rejects.toBeInstanceOf(
+      HostUnreachableError,
+    );
+
+    expect(fn).toHaveBeenCalledTimes(3);
+    expect(esperas).toEqual([2_000, 4_000]);
   });
 
   it('no reintenta un error de red con código desconocido', async () => {

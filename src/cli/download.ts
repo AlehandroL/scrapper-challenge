@@ -44,8 +44,8 @@ import { RateLimiter } from '../http/rate-limiter.ts';
 import { createSession } from '../http/session.ts';
 import type { JsfRequest } from '../jsf/commands.ts';
 import { JsfView } from '../jsf/view.ts';
-import { createLogger, type Logger } from '../obs/logger.ts';
-import { Metrics } from '../obs/metrics.ts';
+import { cerrarLogs, createLogger, vaciarLogs, type Logger } from '../obs/logger.ts';
+import { Metrics, lineasDeSalud } from '../obs/metrics.ts';
 import { RangoInvalidoError, SourceError, StructuralDriftError } from '../sources/errors.ts';
 import type { RegistroOefa } from '../sources/oefa-rows.ts';
 import type { RegistroPj } from '../sources/pj-rows.ts';
@@ -827,12 +827,16 @@ export async function main(argv: readonly string[]): Promise<number> {
     writer?.close();
     if ('close' in dlq) dlq.close();
     process.off('SIGINT', alInterrumpir);
+    // El bloque humano va por `console.error` —sincrónico— y los logs por un
+    // worker: sin vaciar primero, el `✗` se adelanta a los WARN que lo explican.
+    await vaciarLogs(logger);
     return reportarFallo(error, metrics);
   }
 
   writer?.close();
   if ('close' in dlq) dlq.close();
   process.off('SIGINT', alInterrumpir);
+  await vaciarLogs(logger);
 
   reportar(resumen, metrics, opciones);
 
@@ -863,13 +867,11 @@ function reportar(resumen: ResumenDescarga, metrics: Metrics, opciones: Opciones
   if (!opciones.dryRun) ok(`archivos en ${opciones.destino}/ · manifiesto: ${opciones.manifiesto}`);
 
   const minutos = s.duracionMs / 60_000;
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+  for (const linea of lineasDeSalud(s)) console.log(linea);
   console.log(
     `  páginas/min=${minutos === 0 ? 0 : (resumen.paginas / minutos).toFixed(1)}  ` +
       `éxito de descarga=${intentadas === 0 ? '—' : `${((resumen.descargados / intentadas) * 100).toFixed(1)}%`}`,
   );
-  console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
-  console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
 }
 
 function reportarFallo(error: unknown, metrics: Metrics): number {
@@ -885,17 +887,22 @@ function reportarFallo(error: unknown, metrics: Metrics): number {
   } else {
     console.error(`\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
   }
-  console.error(`  contadores: ${JSON.stringify(metrics.snapshot().contadores)}`);
   console.error('  lo descargado hasta acá está completo y validado; el manifiesto quedó consistente.');
+  // Antes iba solo `contadores`, que ante un fallo temprano es `{}` y no dice
+  // nada. Lo que explica la corrida es el resto del snapshot.
+  for (const linea of lineasDeSalud(metrics.snapshot())) console.error(linea);
   return SALIDA.fallo;
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).then(
-    (codigo) => process.exit(codigo),
-    (error: unknown) => {
-      console.error('\n✗ Fallo no controlado:', error);
-      process.exit(SALIDA.fallo);
-    },
-  );
+  // El transport de pino-pretty vive en un worker y `process.exit()` no lo
+  // espera: sin `cerrarLogs()` se pierden las últimas líneas, las del fallo.
+  const salir = async (codigo: number): Promise<never> => {
+    await cerrarLogs();
+    process.exit(codigo);
+  };
+  main(process.argv.slice(2)).then(salir, (error: unknown) => {
+    console.error('\n✗ Fallo no controlado:', error);
+    return salir(SALIDA.fallo);
+  });
 }

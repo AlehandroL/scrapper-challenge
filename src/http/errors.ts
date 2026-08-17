@@ -12,6 +12,8 @@
  * desincronizadas entre sí.
  */
 
+import { redactUrl } from '../obs/logger.ts';
+
 export interface ErrorContext {
   readonly method: string;
   readonly url: string;
@@ -142,21 +144,46 @@ export class UnexpectedStatusError extends TransportError {
 
 /**
  * Códigos de error de red que sí vale la pena reintentar: son fallos de
- * transporte, no respuestas del servidor. Un `ECONNREFUSED` contra un puerto
- * equivocado también entra acá, y por eso el presupuesto de reintentos para esta
- * clase es corto.
+ * transporte, no respuestas del servidor. Todos comparten la misma forma: la
+ * conexión **llegó a existir** y se cortó, así que volver a intentarla tiene
+ * chance de salir distinto.
  */
 const CODIGOS_TRANSITORIOS: ReadonlySet<string> = new Set([
   'ECONNRESET',
   'ECONNABORTED', // axios marca así los timeouts
   'ETIMEDOUT',
-  'ECONNREFUSED',
   'EPIPE',
-  'EAI_AGAIN', // fallo temporal de DNS
-  'EHOSTUNREACH',
-  'ENETUNREACH',
+  'EAI_AGAIN', // fallo temporal de DNS: el resolver puede contestar en el próximo intento
   'ERR_NETWORK',
 ]);
+
+/**
+ * Códigos que no dicen «el socket se cortó» sino «el host no está»: nunca se
+ * llegó a establecer nada.
+ *
+ * La distinción es la que faltaba. Un transitorio se cura solo en milisegundos y
+ * por eso su presupuesto es corto; esto no se cura dentro de una corrida —un
+ * servicio caído vuelve cuando alguien lo levanta— y gastar tres viajes en 400 ms
+ * no es ni fail-fast ni recuperación: es ruido con forma de reintento.
+ */
+const CODIGOS_HOST_INALCANZABLE: ReadonlySet<string> = new Set([
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ENOTFOUND',
+]);
+
+/** Qué significa cada código, en la lengua del operador y no en la del socket. */
+const DIAGNOSTICO: Readonly<Record<string, string>> = {
+  ECONNREFUSED: 'El servidor rechaza la conexión: el servicio está caído o el puerto cerrado',
+  EHOSTUNREACH: 'No hay ruta hasta el host',
+  ENETUNREACH: 'La red de salida no llega hasta el host',
+  ENOTFOUND: 'El nombre no resuelve en DNS',
+};
+
+export function esHostInalcanzable(code: string | undefined): boolean {
+  return code !== undefined && CODIGOS_HOST_INALCANZABLE.has(code);
+}
 
 /**
  * Fallo por debajo de HTTP: socket cortado, DNS, timeout.
@@ -177,6 +204,40 @@ export class NetworkError extends TransportError {
     super(`Fallo de red (${code ?? 'sin código'}): ${detalle}`, ctx);
     this.code = code;
     this.retryable = code !== undefined && CODIGOS_TRANSITORIOS.has(code);
+  }
+}
+
+/**
+ * El host no acepta conexiones: no hay servicio del otro lado, o la red no llega
+ * hasta él. **Un solo intento.**
+ *
+ * Es hermano de `NetworkError` y no un caso suyo porque la política es la
+ * opuesta: ante un socket cortado, insistir; ante un servicio que no está,
+ * frenar y decir qué comprobar. Tratarlos igual es exactamente el «error
+ * frecuente» que §5.6 señala, una capa más abajo de los códigos HTTP.
+ *
+ * El mensaje carga el diagnóstico porque es lo único que el operador va a ver:
+ * este error sale sin reintentos y sin líneas de «reintentando» que lo
+ * contextualicen. La URL va redactada: el sitio reescribe el id de sesión dentro
+ * del path y un mensaje de error termina en los mismos lugares que un log.
+ */
+export class HostUnreachableError extends TransportError {
+  readonly kind = 'host-unreachable';
+  /** El tipo no lo prohíbe; el presupuesto de `retry.ts` lo acota a un intento.
+   *  Así, volver a la política anterior es cambiar un número y no una clase. */
+  readonly retryable = true;
+  readonly degradaServidor = true;
+  readonly code: string | undefined;
+
+  constructor(ctx: ErrorContext, code: string | undefined, detalle: string) {
+    super(
+      `Host inalcanzable (${code ?? 'sin código'}): ${detalle}. ` +
+        `${DIAGNOSTICO[code ?? ''] ?? 'No se pudo establecer la conexión'}. ` +
+        'Reintentar no lo cura: comprobar el host antes de repetir la corrida — ' +
+        `curl -sS -o /dev/null -w '%{http_code}\\n' --max-time 10 ${redactUrl(ctx.url)}`,
+      ctx,
+    );
+    this.code = code;
   }
 }
 

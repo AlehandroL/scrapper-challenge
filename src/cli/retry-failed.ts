@@ -30,8 +30,8 @@ import { AccessDeniedError } from '../http/errors.ts';
 import { RateLimiter } from '../http/rate-limiter.ts';
 import { createSession } from '../http/session.ts';
 import { JsfView } from '../jsf/view.ts';
-import { createLogger } from '../obs/logger.ts';
-import { Metrics } from '../obs/metrics.ts';
+import { cerrarLogs, createLogger, vaciarLogs } from '../obs/logger.ts';
+import { Metrics, lineasDeSalud } from '../obs/metrics.ts';
 import { SourceError } from '../sources/errors.ts';
 import {
   FUENTES,
@@ -354,12 +354,14 @@ export async function main(argv: readonly string[]): Promise<number> {
   const quedan = reconciliar(plan, resultado, cola.entradas, completa, new Date().toISOString());
   reescribirDlq(opciones.dlq, quedan);
 
+  // Vaciar antes de escribir: los logs salen por un worker y el resumen por
+  // stdout sincrónico, así que sin esto el bloque humano se les adelanta.
+  await vaciarLogs(logger);
+
   paso('Resumen');
   ok(`${resultado.descargados} recuperado(s) · ${resultado.omitidos} ya estaba(n)`);
   ok(`la cola queda con ${quedan.length} entrada(s)`);
-  const s = metrics.snapshot();
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
-  console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
+  for (const linea of lineasDeSalud(metrics.snapshot())) console.log(linea);
 
   if (fallo !== undefined) {
     if (fallo instanceof SourceError) console.error(`\n✗ ${fallo.name} [${fallo.kind}]: ${fallo.message}`);
@@ -399,11 +401,15 @@ const vacio = (): Omit<ResumenDescarga, 'resueltos'> => ({
 });
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const salir = async (codigo: number): Promise<never> => {
+    await cerrarLogs();
+    process.exit(codigo);
+  };
   main(process.argv.slice(2)).then(
-    (codigo) => process.exit(codigo),
+    salir,
     (error: unknown) => {
       console.error('\n✗ Fallo no controlado:', error);
-      process.exit(SALIDA.fallo);
+      return salir(SALIDA.fallo);
     },
   );
 }

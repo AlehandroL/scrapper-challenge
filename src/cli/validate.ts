@@ -32,7 +32,7 @@ import { CircuitBreaker } from '../http/circuit-breaker.ts';
 import { RateLimiter } from '../http/rate-limiter.ts';
 import { createSession } from '../http/session.ts';
 import { JsfView } from '../jsf/view.ts';
-import { createLogger } from '../obs/logger.ts';
+import { cerrarLogs, createLogger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { SourceError } from '../sources/errors.ts';
 import {
@@ -498,11 +498,15 @@ async function preguntarleAlSitio(
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const salir = async (codigo: number): Promise<never> => {
+    await cerrarLogs();
+    process.exit(codigo);
+  };
   main(process.argv.slice(2)).then(
-    (codigo) => process.exit(codigo),
+    salir,
     (e: unknown) => {
       console.error('\n✗ Fallo no controlado:', e);
-      process.exit(SALIDA.fallo);
+      return salir(SALIDA.fallo);
     },
   );
 }

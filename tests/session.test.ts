@@ -11,6 +11,7 @@ import { CircuitBreaker } from '../src/http/circuit-breaker.ts';
 import {
   AccessDeniedError,
   CircuitOpenError,
+  HostUnreachableError,
   NetworkError,
   ServerUnavailableError,
   UnexpectedStatusError,
@@ -188,6 +189,30 @@ describe('Session', () => {
     expect(error).toBeInstanceOf(NetworkError);
     expect((error as NetworkError).retryable).toBe(true);
     expect((error as NetworkError).attempts).toBe(3);
+  });
+
+  it('un host que rechaza la conexión falla al primer intento y dice qué comprobar', async () => {
+    // Un servidor que existió y ya no: es la forma exacta del portal caído
+    // —DNS resuelve, el puerto rechaza— sin depender de red externa.
+    const muerto = await startTestServer();
+    const url = `${muerto.url}/ok;jsessionid=DEADBEEF`;
+    await muerto.close();
+
+    const d = deps();
+    const error = await createSession(d)
+      .get(url)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(HostUnreachableError);
+    expect((error as HostUnreachableError).code).toBe('ECONNREFUSED');
+    expect((error as HostUnreachableError).attempts).toBe(1);
+    expect(d.metrics.reintentos).toBe(0);
+    // El mensaje es lo único que ve quien corre el comando: sale sin líneas de
+    // «reintentando» que lo contextualicen, así que carga el diagnóstico.
+    expect((error as HostUnreachableError).message).toContain('El servidor rechaza la conexión');
+    expect((error as HostUnreachableError).message).toContain('curl');
+    // Y no filtra el id de sesión, que el sitio reescribe dentro del path.
+    expect((error as HostUnreachableError).message).not.toContain('DEADBEEF');
   });
 
   it('el breaker corta ante degradación sostenida', async () => {
