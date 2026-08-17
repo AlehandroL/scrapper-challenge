@@ -19,7 +19,8 @@
  * versiona.
  *
  * Uso:   npm run validate
- *        npm run validate -- --descargas descargas --hash
+ *        npm run validate -- --hash
+ *        npm run validate -- --contra-el-sitio
  */
 
 import { existsSync } from 'node:fs';
