@@ -11,6 +11,11 @@ evidencia/
 # bajó y cuánto pesaba.
 *.pdf
 descargas/
+# Desde el bloque 7 los documentos van a data/<fuente>/, uno por portal: con dos
+# fuentes escribiendo en una sola carpeta, un manifiesto no alcanza para saber de
+# cuál es cada archivo. Se ignoran los subdirectorios de data/ y no data/ entera,
+# porque los .jsonl que viven ahí sí son la entrega.
+data/*/
 
 # Estado de reanudación: es de cada corrida y de cada máquina, no un entregable.
 *.checkpoint.json

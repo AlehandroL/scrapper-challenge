@@ -334,14 +334,18 @@ function leerComando($tr: Seleccion): DocumentoFila {
   // registro simplemente no tiene documento.
   if (onclick === undefined) return { estado: 'sin-enlace' };
 
-  const pares = parseJsfcljs(onclick);
-  if (pares === undefined) return { estado: 'ilegible', onclick };
+  const comando = parseJsfcljs(onclick);
+  if (comando === undefined) return { estado: 'ilegible', onclick };
 
-  const candidatos = Object.entries(pares).filter(([clave, valor]) => clave !== valor);
+  const candidatos = Object.entries(comando.params).filter(([clave, valor]) => clave !== valor);
   const elegido = candidatos.length === 1 ? candidatos[0] : undefined;
   if (elegido === undefined) return { estado: 'ilegible', onclick };
 
-  return { estado: 'ok', uuid: elegido[1], comando: pares };
+  // El `formId` que trae el comando se ignora acá **a propósito**: en OEFA hay
+  // un solo form y el de la vista es ese. Anotarlo sería cargar el registro con
+  // un dato constante; el adapter del Poder Judicial, que sí tiene tres forms,
+  // lo usa.
+  return { estado: 'ok', uuid: elegido[1], comando: comando.params };
 }
 
 /**

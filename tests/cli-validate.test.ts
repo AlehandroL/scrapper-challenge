@@ -19,10 +19,11 @@ import type { Hallazgo, Nivel } from '../src/validate/informe.ts';
 describe('parsearArgs', () => {
   it('sin argumentos usa los valores por defecto', () => {
     expect(parsearArgs([])).toEqual({
+      fuente: 'oefa',
       dataset: 'data/oefa.jsonl',
       manifiesto: 'data/oefa.descargas.jsonl',
       dlq: 'data/oefa.failed.jsonl',
-      descargas: 'descargas',
+      descargas: 'data/oefa',
       checkpoint: 'data/oefa.scrape.checkpoint.json',
       pageSize: 10,
       hash: false,

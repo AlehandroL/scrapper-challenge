@@ -42,13 +42,34 @@ export abstract class JsfProtocolError extends Error {
  * modo de falla que la captura reveló. La política es idéntica en ambos casos:
  * rehacer el bootstrap. `senal` queda para logs y métricas.
  */
+/**
+ * Cómo anunció el servidor que la vista no se pudo restaurar.
+ *
+ * Las tres son la **misma condición** y por eso comparten clase: separarlas en
+ * tres tipos invitaría a atrapar una y dejar pasar las otras dos, que es
+ * exactamente el error que §5.2 documenta para `<error>` contra `<redirect>`.
+ *
+ * - `error` — la forma canónica de la spec: `<error-name>ViewExpiredException`.
+ *   Es la que uno implementa primero si escribe contra la spec, y contra OEFA no
+ *   matchea nunca.
+ * - `redirect` — lo que OEFA contesta de verdad: `200`, 113 bytes, un
+ *   `<partial-response>` con un `<redirect>` y sin una sola mención a
+ *   `ViewExpiredException` (`fixtures/oefa/06-view-expired.xml`).
+ * - `pagina-inicial` — la que aparece cuando el protocolo es **no-ajax**: el
+ *   servidor devuelve `200` con la página de inicio, que es un cuerpo
+ *   perfectamente válido salvo por no traer resultados. No hay XML donde poner
+ *   una señal, así que la única evidencia es que la vista volvió al principio.
+ *   Es la que corresponde al portal del Poder Judicial (§5.11).
+ */
+export type SenalVistaCaida = 'error' | 'redirect' | 'pagina-inicial';
+
 export class ViewExpiredError extends JsfProtocolError {
   readonly kind = 'view-expired';
   readonly recoverable = true;
-  readonly senal: 'error' | 'redirect';
+  readonly senal: SenalVistaCaida;
   readonly detalle: string;
 
-  constructor(url: string, senal: 'error' | 'redirect', detalle: string) {
+  constructor(url: string, senal: SenalVistaCaida, detalle: string) {
     super(`La vista no se pudo restaurar (señal: <${senal}>): ${detalle}`, url);
     this.senal = senal;
     this.detalle = detalle;

@@ -112,7 +112,7 @@ describe('alineación del ViewState (§5.4)', () => {
     const [pagina] = await recolectar(fuente, { hasta: 1 });
     const fila = pagina?.filas[0];
 
-    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, pagina?.viewState ?? ''));
+    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, { viewState: pagina?.viewState ?? '' }));
 
     expect(res.headers['content-type']).toBe('application/octet-stream');
   });
@@ -124,7 +124,7 @@ describe('alineación del ViewState (§5.4)', () => {
 
     // Misma sesión, misma fila, mismos campos: lo único que cambia es de qué
     // página viene el token. Es el experimento del bloque 1, palabra por palabra.
-    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, segunda?.viewState ?? ''));
+    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, { viewState: segunda?.viewState ?? '' }));
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');

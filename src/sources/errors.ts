@@ -57,7 +57,24 @@ export type TipoDrift =
    * setecientos fallos es exactamente el modo de falla que §6.4 existe para
    * cortar.
    */
-  | 'descarga-no-pdf';
+  | 'descarga-no-pdf'
+  /**
+   * No se encontró en la página el control que dispara la búsqueda.
+   *
+   * Los tres tipos que siguen son del adapter del Poder Judicial y comparten
+   * causa: ese portal no expone su protocolo en un script de configuración como
+   * PrimeFaces, así que el adapter **descubre** los comandos leyendo los
+   * `onclick` de la página. Cuando el descubrimiento falla hay que decir *cuál*
+   * falló, porque cada uno se cierra capturando un request distinto.
+   */
+  | 'busqueda-no-descubierta'
+  /** No se encontró el control de «página siguiente». Ver §5.11. */
+  | 'paginacion-no-descubierta'
+  /**
+   * La página de resultados no trae ningún componente con la forma
+   * `form:iterador:N:componente`, que es como se reconocen las filas.
+   */
+  | 'sin-iterador';
 
 /**
  * El peor modo de falla de un scraper no es la excepción: es seguir corriendo

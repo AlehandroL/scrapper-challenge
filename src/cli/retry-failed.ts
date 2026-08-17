@@ -33,28 +33,32 @@ import { JsfView } from '../jsf/view.ts';
 import { createLogger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { SourceError } from '../sources/errors.ts';
-import { URL_OEFA, createOefaSource } from '../sources/oefa.ts';
-import type { RegistroOefa } from '../sources/oefa-rows.ts';
+import {
+  FUENTES,
+  colaPorDefecto,
+  descriptorDe,
+  documentosPorDefecto,
+  manifiestoPorDefecto,
+} from '../sources/registry.ts';
+import type { RegistroBase } from '../sources/types.ts';
 import { colaEnMemoria, leerDlq, reescribirDlq, type EntradaDlq } from '../store/dlq.ts';
 import { openJsonlWriter, repararCola } from '../store/jsonl.ts';
 import {
   descargar,
   leerManifiesto,
-  nombreDeArchivoOefa,
+  nombreDeArchivoDe,
   type DescargaDeps,
   type EntradaManifiesto,
   type ResumenDescarga,
 } from './download.ts';
 
-const DESTINO_POR_DEFECTO = 'descargas';
-const MANIFIESTO_POR_DEFECTO = 'data/oefa.descargas.jsonl';
-const DLQ_POR_DEFECTO = 'data/oefa.failed.jsonl';
+const FUENTE_POR_DEFECTO = 'oefa';
 const MAX_INTENTOS_POR_DEFECTO = 5;
-const PAGE_SIZE = 10;
 
 export const SALIDA = { ok: 0, fallo: 1, uso: 2, conFallos: 3, interrumpida: 130 } as const;
 
 export interface OpcionesCli {
+  readonly fuente: string;
   readonly dlq: string;
   readonly destino: string;
   readonly manifiesto: string;
@@ -66,9 +70,10 @@ export interface OpcionesCli {
 const AYUDA = `
 Uso: npm run retry-failed -- [opciones]
 
-  --dlq <ruta>          Cola de fallos. Por defecto ${DLQ_POR_DEFECTO}.
-  --destino <dir>       Directorio de los archivos. Por defecto ${DESTINO_POR_DEFECTO}/.
-  --manifiesto <ruta>   JSONL con el mapeo id → archivo. Por defecto ${MANIFIESTO_POR_DEFECTO}.
+  --fuente <nombre>     ${FUENTES.join(' | ')}. Por defecto ${FUENTE_POR_DEFECTO}.
+  --dlq <ruta>          Cola de fallos. Por defecto data/<fuente>.failed.jsonl.
+  --destino <dir>       Directorio de los archivos. Por defecto data/<fuente>/.
+  --manifiesto <ruta>   JSONL con el mapeo id → archivo. Por defecto data/<fuente>.descargas.jsonl.
   --max-intentos <n>    Se deja de reintentar a partir de acá. Por defecto ${MAX_INTENTOS_POR_DEFECTO}.
   --dry-run             Reporta qué reintentaría, sin tocar la red ni el disco.
   --help                Esto.
@@ -86,6 +91,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       strict: true,
       allowPositionals: false,
       options: {
+        fuente: { type: 'string' },
         dlq: { type: 'string' },
         destino: { type: 'string' },
         manifiesto: { type: 'string' },
@@ -105,10 +111,13 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
     throw new Error(`Argumentos inválidos: --max-intentos debe ser un entero ≥ 1, llegó «${crudo}»`);
   }
 
+  const fuente = values.fuente ?? FUENTE_POR_DEFECTO;
+
   return {
-    dlq: values.dlq ?? DLQ_POR_DEFECTO,
-    destino: values.destino ?? DESTINO_POR_DEFECTO,
-    manifiesto: values.manifiesto ?? MANIFIESTO_POR_DEFECTO,
+    fuente,
+    dlq: values.dlq ?? colaPorDefecto(fuente),
+    destino: values.destino ?? documentosPorDefecto(fuente),
+    manifiesto: values.manifiesto ?? manifiestoPorDefecto(fuente),
     maxIntentos,
     dryRun: values['dry-run'] === true,
     ayuda: values.help === true,
@@ -202,12 +211,14 @@ const ok = (s: string): void => console.log(`  ✓ ${s}`);
 export async function main(argv: readonly string[]): Promise<number> {
   let opciones: OpcionesCli;
   let config: ReturnType<typeof loadConfig>;
+  let descriptor: ReturnType<typeof descriptorDe>;
   try {
     opciones = parsearArgs(argv);
     if (opciones.ayuda) {
       console.log(AYUDA);
       return SALIDA.ok;
     }
+    descriptor = descriptorDe(opciones.fuente);
     config = loadConfig();
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
@@ -272,8 +283,11 @@ export async function main(argv: readonly string[]): Promise<number> {
     },
   );
 
-  const view = new JsfView({ session, logger, metrics }, { pageUrl: URL_OEFA });
-  const fuente = createOefaSource({ view, logger, metrics }, { pageSize: PAGE_SIZE });
+  const view = new JsfView({ session, logger, metrics }, { pageUrl: descriptor.urlBase });
+  const fuente = descriptor.crear(
+    { view, logger, metrics },
+    descriptor.pageSize === undefined ? {} : { pageSize: descriptor.pageSize },
+  );
 
   // La cola se recolecta en memoria y el archivo se reescribe entero al final:
   // appendear acá dejaría las entradas viejas y las nuevas conviviendo, y la
@@ -293,7 +307,13 @@ export async function main(argv: readonly string[]): Promise<number> {
   };
   process.on('SIGINT', alInterrumpir);
 
-  const deps: DescargaDeps<RegistroOefa> = {
+  const nombreDeArchivo = nombreDeArchivoDe(descriptor.nombre);
+  if (nombreDeArchivo === undefined) {
+    console.error(`\n✗ la fuente «${descriptor.nombre}» no tiene política de nombres de archivo`);
+    return SALIDA.fallo;
+  }
+
+  const deps: DescargaDeps<RegistroBase> = {
     fuente,
     emisor: view,
     dlq: cola,
@@ -311,13 +331,13 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     resumen = await descargar(deps, {
       destino: opciones.destino,
-      nombreDeArchivo: nombreDeArchivoOefa,
+      nombreDeArchivo,
       estado,
       intentosPrevios,
       // El filtro corre sobre lo que el sitio sirve hoy: si el registro se movió
       // de página, no matchea, y la reconciliación lo marca `no-encontrado` en
       // vez de dejarlo dando vueltas para siempre.
-      filtro: (registro: RegistroOefa) => aReintentar.has(registro.id),
+      filtro: (registro: RegistroBase) => aReintentar.has(registro.id),
       ...(plan.desde === undefined ? {} : { desde: plan.desde }),
       ...(plan.hasta === undefined ? {} : { hasta: plan.hasta }),
       debeParar: () => interrumpido,

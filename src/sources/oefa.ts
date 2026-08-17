@@ -32,6 +32,13 @@ import type { JsfView } from '../jsf/view.ts';
 import type { Logger } from '../obs/logger.ts';
 import type { Metrics } from '../obs/metrics.ts';
 import {
+  verificarForma,
+  verificarIdentidades,
+  verificarPageSize,
+  type Aviso,
+  type ContextoPagina,
+} from './aserciones.ts';
+import {
   PaginaDesalineadaError,
   RangoInvalidoError,
   RecuperacionAgotadaError,
@@ -181,7 +188,7 @@ class OefaSource implements Fuente<RegistroOefa> {
     }
     if (fila.descarga === undefined) throw new SinDocumentoError(FUENTE, fila.registro.id);
 
-    return this.#view.prepareCommand(fila.descarga, pagina.viewState);
+    return this.#view.prepareCommand(fila.descarga, { viewState: pagina.viewState });
   }
 
   // -------------------------------------------------------------------------
@@ -260,14 +267,7 @@ class OefaSource implements Fuente<RegistroOefa> {
    * el script del widget. Que falte el chequeo ahí no es un olvido.
    */
   #verificarEncabezado(tabla: TablaParseada): void {
-    if (tabla.pageSize !== undefined && tabla.pageSize !== this.#pageSize) {
-      throw this.#drift(
-        'page-size',
-        `el widget declara ${tabla.pageSize} filas por página y se configuró ${this.#pageSize}: ` +
-          'todos los offsets quedarían corridos',
-        { declarado: tabla.pageSize, configurado: this.#pageSize },
-      );
-    }
+    this.#conMetrica(() => verificarPageSize(FUENTE, tabla.pageSize, this.#pageSize));
 
     // El conteo de columnas sí es error (se chequea por fila); los textos, no.
     // Una tilde agregada o un renombre editorial no rompen nada, y hacer que
@@ -366,11 +366,16 @@ class OefaSource implements Fuente<RegistroOefa> {
   }
 
   /**
-   * Todas las aserciones de §6.4, en el único lugar que ve el contexto completo.
+   * Parseo y aserciones, con el contexto completo del recorrido.
    *
-   * El orden importa: de lo más grosero a lo más fino, para que el mensaje
-   * describa la causa y no una consecuencia. Una página que llegó vacía no tiene
-   * sentido revisarla columna por columna.
+   * Las aserciones viven en `aserciones.ts` porque no son de OEFA —dependen del
+   * offset, del tamaño de página y del total, y de nada más—, pero el contexto
+   * que las hace decidibles se arma acá: `jsf/datatable.ts` puede ver que la
+   * tabla vino vacía y no puede saber si eso es una búsqueda sin resultados o la
+   * sesión perdida.
+   *
+   * Entre las dos fases corren las aserciones **por fila**, que sí son de este
+   * portal: siete columnas, la numeración, el enlace legible y el esquema.
    */
   #construirPagina(
     fragmento: string,
@@ -379,90 +384,35 @@ class OefaSource implements Fuente<RegistroOefa> {
     ultima: number,
   ): Pagina<RegistroOefa> {
     const tabla = parseTabla(fragmento);
-    const esperadas = Math.min(this.#pageSize, this.#total - first);
-    const ctx: ContextoDrift = { pagina: numero, first, esperadas };
+    const ctx: ContextoPagina = {
+      fuente: FUENTE,
+      numero,
+      first,
+      pageSize: this.#pageSize,
+      total: this.#total,
+    };
+    const ctxDrift: ContextoDrift = { pagina: numero, first, esperadas: Math.min(this.#pageSize, this.#total - first) };
 
-    // 1. Cero filas. El modo de falla más caro del proyecto (§2.5): sin cookie
-    //    la paginación contesta 200 con la tabla vacía, sin excepción, y el
-    //    síntoma se confunde con «el selector dejó de matchear».
-    if (tabla.filas.length === 0) {
-      throw this.#drift(
-        'sin-filas',
-        tabla.vacia
-          ? 'la tabla llegó marcada como vacía en medio de un resultado con registros: ' +
-            'la sesión se perdió o el bean se reinició'
-          : 'cero filas sin marca de tabla vacía: el selector quedó obsoleto',
-        { ...ctx, marcadaVacia: tabla.vacia },
-      );
-    }
-
-    // 2. Cantidad exacta. Comparar contra `min(pageSize, total - first)` cubre la
-    //    última página —tres filas en OEFA— sin un caso especial que después haya
-    //    que recordar mantener.
-    if (tabla.filas.length !== esperadas) {
-      throw this.#drift(
-        'pagina-incompleta',
-        `llegaron ${tabla.filas.length} filas y correspondían ${esperadas}`,
-        { ...ctx, observadas: tabla.filas.length },
-      );
-    }
-
-    // 3. Los índices. Es el oráculo del bean reiniciado: si el servidor ignoró el
-    //    `dt_first`, los `data-ri` arrancan en 0 aunque se hayan pedido en 1.730.
-    const indices = tabla.filas.map((f) => f.indice);
-    const desalineado = indices.findIndex((valor, i) => valor !== first + i);
-    if (desalineado !== -1) {
-      throw this.#drift(
-        'indices-desalineados',
-        `se pidió el offset ${first} y la fila ${desalineado} llegó con data-ri ${indices[desalineado]}`,
-        { ...ctx, primerIndice: indices[0] ?? -1 },
-      );
-    }
+    this.#conMetrica(() =>
+      verificarForma(
+        tabla.filas.map((f) => f.indice),
+        ctx,
+        tabla.vacia,
+      ),
+    );
 
     const capturadoEn = new Date().toISOString();
-    const filas = tabla.filas.map((cruda) => this.#construirFila(cruda, numero, capturadoEn, ctx));
+    const filas = tabla.filas.map((cruda) => this.#construirFila(cruda, numero, capturadoEn, ctxDrift));
 
-    // 4. Identidades repetidas dentro de la página. **Aviso, no error**, y la
-    //    razón es que ya se probó al revés: la primera versión detenía la
-    //    corrida, y la página 28 del sitio real la detuvo — dos filas con el
-    //    mismo expediente, administrado, resolución y documento, distinguidas
-    //    solo por la unidad fiscalizable. Con la identidad derivada del
-    //    contenido esas dos filas son distintas y no llegan acá; lo que sí llega
-    //    es una fila **idéntica** repetida, que no aporta información y se
-    //    deduplica sola al persistir. Y la aserción de índices ya garantiza que
-    //    el parser no pueda repetir una fila por su cuenta.
-    const ids = filas.map((f) => f.registro.id);
-    const repetidas = filas.filter((f, i) => ids.indexOf(f.registro.id) !== i);
-    if (repetidas.length > 0) {
-      this.#metrics.increment('sources.filas_identicas', repetidas.length);
-      // Se informan todas y no solo la primera: en la corrida real hubo una
-      // página con la misma fila tres veces, y un mensaje que nombra una sola
-      // hace pensar que faltó un registro cuando faltaron dos.
-      this.#advertir(`${repetidas.length} fila(s) idénticas a otra de la misma página`, {
-        ...ctx,
-        indices: repetidas.map((f) => f.registro.indice).join(', '),
-      });
-    }
-
-    // 5. Solapamiento contra lo ya recorrido (§6.3). Es el único oráculo que ve
-    //    el caso del servidor que respeta los `data-ri` pero sirve otro
-    //    contenido, que el chequeo de índices no puede distinguir.
-    //    Se compara contra lo visto **en esta corrida**, nunca contra el archivo:
-    //    en una corrida reanudada todo lo del archivo es legítimamente repetido.
-    const yaVistos = ids.filter((u) => this.#vistosEnCorrida.has(u));
-    if (yaVistos.length === ids.length) {
-      throw this.#drift(
-        'solapamiento',
-        `las ${ids.length} filas de la página ${numero} ya se habían leído: la paginación no avanzó`,
+    const avisos = this.#conMetrica(() =>
+      verificarIdentidades(
+        filas.map((f) => f.registro),
         ctx,
-      );
-    }
-    if (yaVistos.length > 0) {
-      this.#metrics.increment('sources.duplicados', yaVistos.length);
-      this.#advertir(`${yaVistos.length} fila(s) repetidas respecto de páginas anteriores`, ctx);
-    }
+        this.#vistosEnCorrida,
+      ),
+    );
+    for (const aviso of avisos) this.#avisar(aviso);
 
-    for (const u of ids) this.#vistosEnCorrida.add(u);
     this.#metrics.increment('sources.paginas');
     this.#metrics.increment('sources.registros', filas.length);
 
@@ -561,4 +511,43 @@ class OefaSource implements Fuente<RegistroOefa> {
     this.#metrics.increment('sources.drift_warn');
     this.#log.warn(contexto, detalle);
   }
+
+  /**
+   * Le pone métrica y log a un drift que nació en `aserciones.ts`.
+   *
+   * El módulo de aserciones es puro —no cuenta ni loguea— y eso es lo que
+   * permite testear los cinco desenlaces sin montar un `Metrics`. La
+   * contrapartida es este envoltorio: **el único lugar** por el que un drift del
+   * módulo llega al CLI, y por lo tanto el único que puede olvidarse de contarlo.
+   */
+  #conMetrica<T>(fn: () => T): T {
+    try {
+      return fn();
+    } catch (error) {
+      if (error instanceof StructuralDriftError) {
+        this.#metrics.increment(`sources.drift.${error.tipo}`);
+        this.#log.error({ tipo: error.tipo, ...error.contexto }, error.message);
+      }
+      throw error;
+    }
+  }
+
+  #avisar(aviso: Aviso): void {
+    this.#metrics.increment(aviso.metrica, contarDe(aviso));
+    this.#advertir(aviso.detalle, aviso.contexto);
+  }
+}
+
+/**
+ * Cuántas filas cubre un aviso.
+ *
+ * Los contadores de `filas_identicas` y `duplicados` se incrementan por fila y no
+ * por aviso: «3 duplicados en una página» y «3 páginas con un duplicado» son
+ * cosas distintas y el número tiene que reflejar la primera. El mensaje ya trae
+ * la cantidad al principio, así que se lee de ahí en vez de duplicar el dato en
+ * el tipo.
+ */
+function contarDe(aviso: Aviso): number {
+  const n = Number(/^(\d+)/.exec(aviso.detalle)?.[1]);
+  return Number.isInteger(n) && n > 0 ? n : 1;
 }

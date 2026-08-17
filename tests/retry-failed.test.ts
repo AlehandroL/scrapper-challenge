@@ -51,8 +51,9 @@ const resumen = (resueltos: string[] = []): ResumenDescarga =>
 describe('parsearArgs', () => {
   it('sin argumentos usa los valores por defecto', () => {
     expect(parsearArgs([])).toEqual({
+      fuente: 'oefa',
       dlq: 'data/oefa.failed.jsonl',
-      destino: 'descargas',
+      destino: 'data/oefa',
       manifiesto: 'data/oefa.descargas.jsonl',
       maxIntentos: 5,
       dryRun: false,

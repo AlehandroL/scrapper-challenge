@@ -342,16 +342,62 @@ describe('datatable', () => {
 });
 
 describe('mojarra.jsfcljs', () => {
-  it('extrae el componente y el uuid del onclick real de la fila 0', () => {
+  it('extrae el form, el componente y el uuid del onclick real de la fila 0', () => {
     const onclick = BUSQUEDA.match(/onclick="(mojarra\.jsfcljs[^"]*)"/)?.[1] ?? '';
     expect(parseJsfcljs(onclick)).toEqual({
-      [`${FORM_ID}:dt:0:j_idt63`]: `${FORM_ID}:dt:0:j_idt63`,
-      param_uuid: '153a6d2a-cbed-40ef-b8ef-cd2272b19867',
+      formId: FORM_ID,
+      params: {
+        [`${FORM_ID}:dt:0:j_idt63`]: `${FORM_ID}:dt:0:j_idt63`,
+        param_uuid: '153a6d2a-cbed-40ef-b8ef-cd2272b19867',
+      },
     });
   });
 
   it('devuelve undefined si el patrón no está, en vez de un objeto vacío', () => {
     expect(parseJsfcljs('return false')).toBeUndefined();
     expect(parseJsfcljs('PrimeFaces.ab({s:"form:btnBuscar"})')).toBeUndefined();
+  });
+
+  /**
+   * El caso que motivó el cambio de firma, y no es hipotético: es el markup
+   * archivado del portal objetivo (`fixtures/pj/02-busqueda-resultado.html`).
+   * La versión anterior devolvía `undefined` acá, con lo que el adapter habría
+   * marcado **toda** fila del Poder Judicial como enlace ilegible en la primera
+   * página.
+   */
+  it('lee el patrón envuelto en jsf.util.chain, con las comillas escapadas', () => {
+    const onclick =
+      "jsf.util.chain(this,event,'this.form.target=\\'_self\\';RichFaces.$(\\'panelStatus\\').show();'," +
+      "'mojarra.jsfcljs(document.getElementById(\\'formBusqueda\\')," +
+      "{\\'formBusqueda:j_idt65\\':\\'formBusqueda:j_idt65\\',\\'formBusqueda:j_idt66\\':\\'\\'},\\'\\')');return false";
+
+    expect(parseJsfcljs(onclick)).toEqual({
+      formId: 'formBusqueda',
+      params: { 'formBusqueda:j_idt65': 'formBusqueda:j_idt65', 'formBusqueda:j_idt66': '' },
+    });
+  });
+
+  it('devuelve el form que el onclick nombra, que no tiene por qué ser el de la vista', () => {
+    const onclick =
+      "mojarra.jsfcljs(document.getElementById('frmDetalle2'),{'frmDetalle2:ver':'frmDetalle2:ver','uuid':'47cd6b37'},'')";
+
+    expect(parseJsfcljs(onclick)?.formId).toBe('frmDetalle2');
+  });
+
+  /**
+   * El primer argumento no siempre es un `getElementById`. `undefined` es un
+   * dato —«no dijo contra qué form»— y no un fallo: quien llama decide si le
+   * sirve el form vigente.
+   */
+  it('deja el form en undefined si el primer argumento no nombra ninguno', () => {
+    const comando = parseJsfcljs("mojarra.jsfcljs(this.form,{'a':'a','uuid':'x'},'')");
+    expect(comando?.formId).toBeUndefined();
+    expect(comando?.params).toEqual({ a: 'a', uuid: 'x' });
+  });
+
+  /** Un apóstrofo dentro de un valor es la razón por la que esto no usa JSON.parse. */
+  it('no se rompe con un apóstrofo dentro de un valor', () => {
+    const comando = parseJsfcljs("mojarra.jsfcljs(document.getElementById('f'),{'f:b':'f:b','razon':'O\\'Higgins S.A.'},'')");
+    expect(comando?.params['razon']).toBe("O'Higgins S.A.");
   });
 });
