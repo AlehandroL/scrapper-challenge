@@ -47,8 +47,16 @@ import { JsfView } from '../jsf/view.ts';
 import { createLogger, type Logger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { RangoInvalidoError, SourceError, StructuralDriftError } from '../sources/errors.ts';
-import { URL_OEFA, createOefaSource } from '../sources/oefa.ts';
 import type { RegistroOefa } from '../sources/oefa-rows.ts';
+import type { RegistroPj } from '../sources/pj-rows.ts';
+import {
+  FUENTES,
+  checkpointPorDefecto,
+  colaPorDefecto,
+  descriptorDe,
+  documentosPorDefecto,
+  manifiestoPorDefecto,
+} from '../sources/registry.ts';
 import type { Fuente, Pagina, RegistroBase } from '../sources/types.ts';
 import {
   borrarCheckpoint,
@@ -86,13 +94,9 @@ export const TAMANO_MINIMO = 1024;
  */
 export const MAX_INVALIDAS_SEGUIDAS = 3;
 
-const PAGE_SIZE = 10;
-const DESTINO_POR_DEFECTO = 'descargas';
-const MANIFIESTO_POR_DEFECTO = 'data/oefa.descargas.jsonl';
-const DLQ_POR_DEFECTO = 'data/oefa.failed.jsonl';
+const FUENTE_POR_DEFECTO = 'oefa';
 /** Uno por comando: `scrape` y `download` avanzan a ritmos distintos sobre la
  *  misma fuente, y compartirlo haría que el atrasado se saltee páginas. */
-const CHECKPOINT_POR_DEFECTO = 'data/oefa.download.checkpoint.json';
 const TAREA = 'download';
 
 /** `0` ok · `1` la corrida falló · `2` uso incorrecto · `3` completó con fallos
@@ -507,6 +511,45 @@ export const nombreDeArchivoOefa = (registro: RegistroOefa, documentoUuid: strin
 };
 
 /**
+ * Lo mismo para el portal del Poder Judicial, donde el slug sale del texto de la
+ * fila y no de un campo con nombre.
+ *
+ * No es una versión pobre de la de OEFA: es la que corresponde a un registro cuyo
+ * esquema no se pudo reversar (`pj-rows.ts`). Inventar un campo `resolucion` para
+ * que el nombre quedara más lindo produciría archivos rotulados con un dato que
+ * nadie verificó. El mapeo autoritativo vive en el manifiesto, igual que siempre.
+ */
+export const nombreDeArchivoPj = (registro: RegistroPj, documentoUuid: string): string => {
+  const slug = sanitizar(registro.texto, 80);
+  return slug === '' ? `${documentoUuid}.pdf` : `${documentoUuid}_${slug}.pdf`;
+};
+
+/**
+ * Qué política de nombres le toca a cada fuente.
+ *
+ * Vive en el CLI y no en el descriptor de la fuente porque el nombre de archivo
+ * es una decisión de **persistencia**, no de protocolo: `sources/` no sabe que
+ * existe un disco, y meterle esto sería la primera grieta de esa separación. El
+ * composition root es el lugar donde las dos capas se encuentran.
+ */
+const NOMBRE_DE_ARCHIVO: Record<string, (registro: RegistroDescargable, documentoUuid: string) => string> = {
+  oefa: (registro, uuid) => nombreDeArchivoOefa(registro as RegistroOefa, uuid),
+  pj: (registro, uuid) => nombreDeArchivoPj(registro as RegistroPj, uuid),
+};
+
+/**
+ * La política de nombres de una fuente, o `undefined` si no tiene.
+ *
+ * Se exporta para que `retry-failed` use **la misma**: si los dos comandos
+ * nombraran distinto, un reintento escribiría un archivo nuevo al lado del que
+ * ya estaba y el manifiesto quedaría describiendo el viejo.
+ */
+export const nombreDeArchivoDe = (
+  fuente: string,
+): ((registro: RegistroDescargable, documentoUuid: string) => string) | undefined =>
+  NOMBRE_DE_ARCHIVO[fuente];
+
+/**
  * Reconstruye qué hay bajado a partir del manifiesto.
  *
  * Tolerante con una línea ilegible: se reporta y se sigue con lo leído. El costo
@@ -539,6 +582,7 @@ export async function leerManifiesto(
 }
 
 export interface OpcionesCli {
+  readonly fuente: string;
   readonly desde?: number;
   readonly hasta?: number;
   readonly destino: string;
@@ -554,12 +598,13 @@ export interface OpcionesCli {
 const AYUDA = `
 Uso: npm run download -- [opciones]
 
+  --fuente <nombre>    ${FUENTES.join(' | ')}. Por defecto ${FUENTE_POR_DEFECTO}.
   --desde <n>          Primera página (1-based). Por defecto, la del checkpoint.
   --hasta <n>          Última página inclusive. Por defecto, la última.
-  --destino <dir>      Directorio de los archivos. Por defecto ${DESTINO_POR_DEFECTO}/.
-  --manifiesto <ruta>  JSONL con el mapeo id → archivo. Por defecto ${MANIFIESTO_POR_DEFECTO}.
-  --dlq <ruta>         Cola de fallos. Por defecto ${DLQ_POR_DEFECTO}.
-  --checkpoint <ruta>  Estado de reanudación. Por defecto ${CHECKPOINT_POR_DEFECTO}.
+  --destino <dir>      Directorio de los archivos. Por defecto data/<fuente>/.
+  --manifiesto <ruta>  JSONL con el mapeo id → archivo. Por defecto data/<fuente>.descargas.jsonl.
+  --dlq <ruta>         Cola de fallos. Por defecto data/<fuente>.failed.jsonl.
+  --checkpoint <ruta>  Estado de reanudación. Por defecto data/<fuente>.download.checkpoint.json.
   --max-descargas <n>  Corta después de n descargas. Los PDFs pesan ~9 MB.
   --reiniciar          Ignora el checkpoint y recorre desde el principio.
   --dry-run            Recorre y reporta qué bajaría, sin bajar ni escribir.
@@ -578,6 +623,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       strict: true,
       allowPositionals: false,
       options: {
+        fuente: { type: 'string' },
         desde: { type: 'string' },
         hasta: { type: 'string' },
         destino: { type: 'string' },
@@ -603,14 +649,17 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
     throw new Error(`Argumentos inválidos: --hasta (${hasta}) es menor que --desde (${desde})`);
   }
 
+  const fuente = values.fuente ?? FUENTE_POR_DEFECTO;
+
   return {
+    fuente,
     ...(desde === undefined ? {} : { desde }),
     ...(hasta === undefined ? {} : { hasta }),
     ...(maxDescargas === undefined ? {} : { maxDescargas }),
-    destino: values.destino ?? DESTINO_POR_DEFECTO,
-    manifiesto: values.manifiesto ?? MANIFIESTO_POR_DEFECTO,
-    dlq: values.dlq ?? DLQ_POR_DEFECTO,
-    checkpoint: values.checkpoint ?? CHECKPOINT_POR_DEFECTO,
+    destino: values.destino ?? documentosPorDefecto(fuente),
+    manifiesto: values.manifiesto ?? manifiestoPorDefecto(fuente),
+    dlq: values.dlq ?? colaPorDefecto(fuente),
+    checkpoint: values.checkpoint ?? checkpointPorDefecto(fuente, TAREA),
     reiniciar: values.reiniciar === true,
     dryRun: values['dry-run'] === true,
     ayuda: values.help === true,
@@ -632,12 +681,14 @@ const ok = (s: string): void => console.log(`  ✓ ${s}`);
 export async function main(argv: readonly string[]): Promise<number> {
   let opciones: OpcionesCli;
   let config: ReturnType<typeof loadConfig>;
+  let descriptor: ReturnType<typeof descriptorDe>;
   try {
     opciones = parsearArgs(argv);
     if (opciones.ayuda) {
       console.log(AYUDA);
       return SALIDA.ok;
     }
+    descriptor = descriptorDe(opciones.fuente);
     config = loadConfig();
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
@@ -666,8 +717,14 @@ export async function main(argv: readonly string[]): Promise<number> {
     },
   );
 
-  const view = new JsfView({ session, logger, metrics }, { pageUrl: URL_OEFA });
-  const fuente = createOefaSource({ view, logger, metrics }, { pageSize: PAGE_SIZE });
+  const view = new JsfView({ session, logger, metrics }, { pageUrl: descriptor.urlBase });
+  const fuente = descriptor.crear(
+    { view, logger, metrics },
+    descriptor.pageSize === undefined ? {} : { pageSize: descriptor.pageSize },
+  );
+
+  paso(`Fuente: ${descriptor.nombre} — ${descriptor.urlBase}`);
+  console.log(`  evidencia: ${descriptor.evidencia}`);
 
   if (opciones.reiniciar && !opciones.dryRun) borrarCheckpoint(opciones.checkpoint);
   let checkpoint: Checkpoint | undefined;
@@ -680,7 +737,7 @@ export async function main(argv: readonly string[]): Promise<number> {
   const plan = planificarReanudacion(checkpoint, {
     fuente: fuente.nombre,
     tarea: TAREA,
-    pageSize: PAGE_SIZE,
+    pageSize: descriptor.pageSize ?? 0,
     ...(opciones.desde === undefined ? {} : { desde: opciones.desde }),
     ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
   });
@@ -709,9 +766,18 @@ export async function main(argv: readonly string[]): Promise<number> {
   };
   process.on('SIGINT', alInterrumpir);
 
+  const nombreDeArchivo = NOMBRE_DE_ARCHIVO[descriptor.nombre];
+  if (nombreDeArchivo === undefined) {
+    // Una fuente en el registro sin política de nombres es un bug nuestro, no un
+    // error del usuario. Se dice así en vez de caer a la de OEFA: archivos
+    // rotulados con el criterio de otro portal son indistinguibles de los buenos.
+    console.error(`\n✗ la fuente «${descriptor.nombre}» no tiene política de nombres de archivo`);
+    return SALIDA.fallo;
+  }
+
   const opcionesEngine = {
     destino: opciones.destino,
-    nombreDeArchivo: nombreDeArchivoOefa,
+    nombreDeArchivo,
     estado,
     ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
     ...(opciones.maxDescargas === undefined ? {} : { maxDescargas: opciones.maxDescargas }),
@@ -719,7 +785,7 @@ export async function main(argv: readonly string[]): Promise<number> {
     debeParar: () => interrumpido,
   };
 
-  const deps: DescargaDeps<RegistroOefa> = {
+  const deps: DescargaDeps<RegistroDescargable> = {
     fuente,
     emisor: view,
     dlq,
@@ -732,7 +798,7 @@ export async function main(argv: readonly string[]): Promise<number> {
       escribirCheckpoint(opciones.checkpoint, {
         fuente: fuente.nombre,
         tarea: TAREA,
-        pageSize: PAGE_SIZE,
+        pageSize: descriptor.pageSize ?? 0,
         total: pagina.total,
         ultimaPagina: pagina.numero,
         registros: resumen.registros,
@@ -792,7 +858,7 @@ function reportar(resumen: ResumenDescarga, metrics: Metrics, opciones: Opciones
   ok(`${resumen.omitidos} ya presente(s) · ${resumen.compartidos} compartido(s) con otro registro`);
   ok(`${resumen.sinDocumento} fila(s) sin documento publicado`);
   ok(`${resumen.fallidos} fallo(s) en la cola`);
-  ok(`última página completada: ${resumen.ultimaPagina} de ${Math.ceil(resumen.total / PAGE_SIZE)}`);
+  ok(`última página completada: ${resumen.ultimaPagina}`);
   if (resumen.limiteAlcanzado) ok('se alcanzó el límite de --max-descargas');
   if (!opciones.dryRun) ok(`archivos en ${opciones.destino}/ · manifiesto: ${opciones.manifiesto}`);
 

@@ -84,6 +84,18 @@ export const RegistroBaseSchema = z.object({
 export interface Fila<R extends RegistroBase> {
   readonly registro: R;
   readonly descarga: Readonly<Record<string, string>> | undefined;
+  /**
+   * El form contra el que va el POST del documento. `undefined` = el de la vista.
+   *
+   * En OEFA siempre es `undefined`: hay un solo form y anotarlo sería guardar una
+   * constante. Existe porque la página de resultados del Poder Judicial tiene
+   * tres —el de búsqueda, el del detalle y uno con `target="_blank"`— y el
+   * `onclick` de cada fila nombra el suyo. Sin esto, el POST saldría bien formado
+   * contra el form equivocado y el servidor contestaría `200` con la página
+   * re-renderizada: el mismo síntoma que el token desalineado de §5.4, con una
+   * causa que no se le parece en nada.
+   */
+  readonly formulario?: string;
 }
 
 export interface Pagina<R extends RegistroBase> {

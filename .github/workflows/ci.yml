@@ -4,12 +4,15 @@
 # son las que impiden que la separación de capas se degrade en el tercer apuro—
 # solo corrían cuando alguien se acordaba de ejecutarlas.
 #
-# **Los smokes quedan deliberadamente fuera.** Los cuatro (`smoke:oefa`,
-# `smoke:jsf`, `smoke:source`, `smoke:download`) dependen de la red y golpean el
-# sitio real: meterlos acá convertiría cada push en tráfico contra
+# **Los smokes quedan deliberadamente fuera.** Los cinco (`smoke:oefa`,
+# `smoke:jsf`, `smoke:source`, `smoke:download`, `smoke:pj`) dependen de la red y
+# golpean un sitio real: meterlos acá convertiría cada push en tráfico contra
 # publico.oefa.gob.pe, que es exactamente lo que el rate limiter existe para
 # evitar. Y `smoke:download` además baja documentos de varios megas. Se corren a
 # mano cuando se quiere evidencia contra el sitio vivo.
+#
+# `smoke:pj` tiene además una razón propia: desde cualquier runner de GitHub el
+# portal contesta 403, así que en CI solo probaría que el bloqueo sigue ahí.
 
 name: CI
 

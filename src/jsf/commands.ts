@@ -87,25 +87,91 @@ export function buildCommandBody(
   return toSearchParams(form.campos, { ...params, [CAMPO_VIEW_STATE]: viewState });
 }
 
+/** Lo que un `onclick` con `mojarra.jsfcljs` declara: contra qué form, con qué pares. */
+export interface ComandoJsfcljs {
+  /**
+   * El id del form del primer argumento (`document.getElementById('…')`).
+   *
+   * Se devuelve en vez de descartarse porque **no siempre es el form de la
+   * vista**. En OEFA hay uno solo y da igual; la página de resultados del Poder
+   * Judicial tiene tres con el mismo token —`formBusqueda`, `frmDetalle` y
+   * `frmDetalle2` con `target="_blank"`— y el POST del documento va al que el
+   * `onclick` nombre, no al que la vista eligió en el bootstrap.
+   *
+   * `undefined` si el patrón trae otra cosa en esa posición: es un dato, no un
+   * error, y quien llama decide si le sirve el form vigente.
+   */
+  readonly formId: string | undefined;
+  readonly params: Record<string, string>;
+}
+
 /**
- * Extrae los pares del `onclick`:
+ * Deshace **un** nivel de escape de un fragmento de JS incrustado en otro.
+ *
+ * Un nivel, no todos, y la distinción es el corazón de este parser: `\'` significa
+ * dos cosas distintas según dónde aparezca. Dentro de un valor es un apóstrofo
+ * literal —`'O\'Higgins S.A.'`, y en un corpus de razones sociales aparecen—;
+ * dentro de una llamada que viaja como string adentro de otra, es el delimitador
+ * de la llamada interna. Desescapar de entrada convierte el primero en un
+ * terminador y parte el valor al medio.
+ */
+const desescapar = (js: string): string => js.replace(/\\(['"\\])/g, '$1');
+
+/**
+ * Un valor entre comillas simples que admite comillas escapadas adentro.
+ *
+ * `(?:[^'\\]|\\.)*` es la forma canónica: cualquier carácter que no sea comilla
+ * ni barra, **o** una barra con lo que venga detrás. Un `[^']*` pelado corta el
+ * valor en el primer `\'` y devuelve media razón social.
+ */
+const PAR = /'((?:[^'\\]|\\.)*)'\s*:\s*'((?:[^'\\]|\\.)*)'/g;
+
+function leerLlamada(js: string): ComandoJsfcljs | undefined {
+  const objeto = js.match(/mojarra\.jsfcljs\(([^{]*)\{([^}]*)\}/);
+  if (objeto === null || objeto[1] === undefined || objeto[2] === undefined) return undefined;
+
+  const pares: Record<string, string> = {};
+  for (const par of objeto[2].matchAll(PAR)) {
+    if (par[1] !== undefined && par[2] !== undefined) pares[desescapar(par[1])] = desescapar(par[2]);
+  }
+  if (Object.keys(pares).length === 0) return undefined;
+
+  // El primer argumento suele ser `document.getElementById('x')`, pero también
+  // puede ser `this.form` o una variable: en esos casos no hay id que leer y se
+  // devuelve `undefined` en vez de inventar uno.
+  const form = objeto[1].match(/getElementById\(\s*'([^']+)'/);
+
+  return { formId: form?.[1], params: pares };
+}
+
+/**
+ * Extrae el form y los pares del `onclick`:
  *
  *     mojarra.jsfcljs(document.getElementById('form'),{'form:dt:0:j_idt63':'…','param_uuid':'153a…'},'')
  *
  * **Sin `JSON.parse`.** La vía obvia —cambiar comillas simples por dobles y
- * parsear— revienta con cualquier apóstrofo dentro de un valor, y en un corpus
- * de razones sociales aparecen. Dos regex hacen lo mismo sin ese riesgo.
+ * parsear— revienta con cualquier apóstrofo dentro de un valor. Los regex hacen
+ * lo mismo sin ese riesgo.
  *
- * Total: devuelve `undefined` si el patrón no está, en vez de un `{}` que el
- * llamador confundiría con «un comando sin parámetros».
+ * **Se intenta dos veces, y no es cautela: es que el patrón viene envuelto la
+ * mitad de las veces.** En OEFA el `onclick` es la llamada pelada. En el portal
+ * objetivo viaja como argumento de un `jsf.util.chain`, o sea **como string
+ * adentro de otro string**, con todas sus comillas escapadas:
+ *
+ *     onclick="jsf.util.chain(this,event,'…',
+ *       'mojarra.jsfcljs(document.getElementById(\'formBusqueda\'),
+ *          {\'formBusqueda:j_idt65\':\'formBusqueda:j_idt65\'},\'\')');return false"
+ *
+ * Contra esa cadena la primera pasada no encuentra ningún par —todas las
+ * comillas están escapadas— y la segunda, sobre el texto con un nivel de escape
+ * menos, la lee entera. El orden importa: desescapar **antes** de intentar
+ * partiría en dos cualquier valor con un apóstrofo legítimo, que es lo que la
+ * primera pasada preserva. El fixture está en
+ * `fixtures/pj/02-busqueda-resultado.html`.
+ *
+ * Total: devuelve `undefined` si el patrón no está o no trae ningún par, en vez
+ * de un objeto vacío que el llamador confundiría con «un comando sin parámetros».
  */
-export function parseJsfcljs(onclick: string): Record<string, string> | undefined {
-  const objeto = onclick.match(/mojarra\.jsfcljs\([^{]*\{([^}]*)\}/);
-  if (objeto === null || objeto[1] === undefined) return undefined;
-
-  const pares: Record<string, string> = {};
-  for (const par of objeto[1].matchAll(/'([^']*)'\s*:\s*'([^']*)'/g)) {
-    if (par[1] !== undefined && par[2] !== undefined) pares[par[1]] = par[2];
-  }
-  return Object.keys(pares).length === 0 ? undefined : pares;
+export function parseJsfcljs(onclick: string): ComandoJsfcljs | undefined {
+  return leerLlamada(onclick) ?? leerLlamada(desescapar(onclick));
 }

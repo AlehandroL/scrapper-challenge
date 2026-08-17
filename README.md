@@ -33,9 +33,15 @@ detrás de un adapter.
 
 **Decisión de alcance declarada:** no se contrata VPN ni proxy residencial para
 esta entrega. El diagnóstico de acceso al Poder Judicial queda abierto y el
-adapter del PJ no se ejercita contra su fuente. `scripts/check-access.sh` cierra
-ese diagnóstico en un comando desde cualquier red con salida peruana. No se
-simula cobertura que no se logró.
+adapter del PJ **no se ejercita contra su fuente**. `scripts/check-access.sh`
+cierra ese diagnóstico en un comando desde cualquier red con salida peruana, y
+`npm run smoke:pj` ejercita el adapter entero desde ahí. No se simula cobertura
+que no se logró.
+
+Lo que sí se consiguió sin acceso es **markup real del portal objetivo**: el
+archivo web lo sirve desde su propio dominio, y esos snapshots refutaron cuatro
+supuestos sobre los que el adapter se iba a escribir — entre ellos que el sitio
+corriera PrimeFaces. Está en el bloque 7.
 
 ## Estructura
 
@@ -45,10 +51,10 @@ src/
 ├── obs/         ✅ logging estructurado y métricas de la corrida
 ├── config.ts    ✅ entorno validado con zod
 ├── jsf/         ✅ ViewState, partial-response, serialización de forms, comandos
-├── sources/     ✅ adapter OEFA, parsers y esquema del registro · ⬜ pj.ts
+├── sources/     ✅ adapters OEFA y PJ, aserciones compartidas, registro de fuentes
 ├── store/       ✅ JSONL, escritura atómica de archivos, cola de fallos, checkpoint
 ├── validate/    ✅ sanity checks sobre el dataset y los documentos producidos
-└── cli/         ✅ scrape, download, retry-failed, validate
+└── cli/         ✅ scrape, download, retry-failed, validate — los cuatro con --fuente
 ```
 
 El criterio: la capa `jsf/` no sabe nada de jurisprudencia ni de resoluciones
@@ -370,7 +376,7 @@ Los PDFs, con validación de integridad, cola de reintentos y checkpoint por
 página.
 
 ```bash
-npm run download -- --hasta 3      # tres páginas de documentos a descargas/
+npm run download -- --hasta 3      # tres páginas de documentos a data/oefa/
 npm run download                   # todo lo que falte, retomando el checkpoint
 npm run download -- --dry-run      # qué bajaría, sin bajar
 npm run retry-failed               # reintenta lo que quedó en la cola
@@ -591,7 +597,140 @@ bloque 4. Aquéllas miran mientras se lee; éstas miran el archivo terminado, y
 fallan distinto: un drift detiene la corrida, un dataset con huecos termina en
 cero y nadie se entera.
 
-### Bloques 7–8
+### Bloque 7 — Adapter del Poder Judicial ✅
 
-Pendientes: adapter del Poder Judicial y documentación final.
+El adapter del sitio objetivo, más el hallazgo que ordenó todo el bloque: **el
+portal está bloqueado, pero su markup no.**
+
+```bash
+npm test                      # 546 tests, sin red
+npm run scrape -- --fuente pj # requiere salida peruana
+npm run smoke:pj              # ejercita el adapter contra el sitio vivo
+bash scripts/capture-pj.sh    # regenera los fixtures desde el archivo web
+```
+
+#### El archivo web sirve lo que el WAF no
+
+El `403` de `jurisprudencia.pj.gob.pe` es una regla del WAF **de ese portal**
+(§2.2). Nada de eso alcanza a un tercero que ya capturó las páginas: el archivo
+web las sirve desde su propio dominio, sin proxy y desde cualquier red. Hay tres
+snapshots útiles —septiembre de 2025 y dos de 2016— y están versionados en
+[`fixtures/pj/`](fixtures/pj/).
+
+La lección de método vale más que el truco: **el diagnóstico de §2.2 fue tan
+concluyente que dejó de buscarse.** Saber exactamente por qué no se podía llegar
+al sitio hizo que nadie preguntara si el markup se podía conseguir sin llegar.
+
+#### Cuatro supuestos refutados por el markup del propio portal
+
+| Se asumía | Lo que dice el markup |
+|---|---|
+| PrimeFaces, «mismo stack» que OEFA | **RichFaces 4.2.2.Final**: cero coincidencias de PrimeFaces en cuatro páginas |
+| `ViewState` client-side, blob base64 de ~1,5 KB | **Server-side**: el handle `8130872589646157352:-5634686416281607506`, en tres muestras separadas por nueve años |
+| Un solo form, `formBusqueda` | `formBuscador` en 2025, y la vista de resultados tiene **tres** forms con el mismo token — uno con `target="_blank"`, que es el del documento |
+| Búsqueda y paginación por evento AJAX | La búsqueda es un POST **no-ajax** que devuelve la página entera |
+
+Y un defecto real en código ya escrito y ya testeado: el `onclick` del portal
+viene envuelto en `jsf.util.chain` con las comillas escapadas (`\'`), y el regex
+de pares de `parseJsfcljs` no matcheaba ninguno. Devolvía `undefined`, con lo que
+el adapter habría marcado **toda** fila del Poder Judicial como enlace ilegible
+en la primera página. Un `\'` de más entre el parser y el sitio, y el síntoma no
+se parece en nada a la causa.
+
+Arreglarlo tuvo una sutileza: **desescapar de entrada rompe el caso bueno.** Un
+`\'` dentro de un valor es un apóstrofo literal —y en un corpus de razones
+sociales aparecen—. `parseJsfcljs` intenta dos veces: primero el texto crudo, y
+solo si no encontró ningún par, el texto con un nivel de escape menos.
+
+#### La afirmación de §4, puesta a prueba desde afuera
+
+`tests/architecture.test.ts` verifica la separación de capas desde adentro:
+nadie mete dominio en protocolo. Lo que no podía responder es la pregunta de
+afuera — **¿sirve de verdad contra otro portal?**
+
+| Módulo | ¿Transfirió? |
+|---|---|
+| `jsf/view.ts`, `commands.ts`, `form.ts`, `view-state.ts`, `partial-response.ts` | ✅ enteros |
+| `jsf/datatable.ts` | ❌ nada: es de PrimeFaces |
+| `store/`, `http/`, `obs/`, chequeos genéricos de `validate/` | ✅ enteros |
+
+Cinco de seis archivos de la capa de protocolo, con el que no transfirió aislado
+en uno solo **porque el bloque 3 lo separó a propósito**. El comentario de
+`datatable.ts` decía: «el próximo portal legacy puede correr Mojarra con
+RichFaces o con componentes propios: ahí `commands.ts` se reusa entero y este
+archivo se tira». Se tiró.
+
+Los tres cambios que la capa sí necesitó no fueron concesiones al segundo portal:
+eran huecos que OEFA no llegaba a mostrar. `parseJsfcljs` desenvuelve
+`jsf.util.chain` —un patrón de Mojarra, no de este sitio—; `JsfView` conserva
+todos los forms del bootstrap —`parseForm` ya admitía en un comentario que con
+varios forms la elección se vuelve incidental—; y `adoptarPagina()` existe
+porque un POST no-ajax devuelve la vista re-renderizada, y reenviar los campos
+viejos manda al servidor un estado que ya no existe.
+
+#### Lo que no se verificó, dicho como corresponde
+
+**El adapter no se ejercitó contra su fuente.** El archivo web captura GETs; en
+este portal los resultados nacen de un POST, así que ningún snapshot trae filas
+de resultado ni controles de paginación.
+
+| Superficie | Estado |
+|---|---|
+| Ids del form, campos de búsqueda, state saving, los tres forms, forma del `onclick`, descubrimiento del botón «Buscar» | verificado contra markup real |
+| Forma de las filas, comando de paginación, POST de descarga | **sin verificar** — escritos contra lo que documenta un scraper público de terceros |
+
+El diseño se ordenó alrededor de esa asimetría con una regla: **lo que no se
+puede saber se descubre; lo que no se puede descubrir se denuncia con nombre
+propio.** No hay un solo id de componente hardcodeado, y cada fallo de
+descubrimiento es un error que nombra qué request hay que capturar para cerrarlo.
+
+De ahí salen dos decisiones que se ven raras hasta que se lee el porqué:
+
+- **`RegistroPj` guarda las celdas rotuladas con los encabezados**, sin campos con
+  nombre. Declarar `expediente`, `sumilla` o `materia` produciría un archivo
+  lleno de nulos con nombres convincentes.
+- **El tamaño de página se deriva de la primera página.** Es el número que
+  traduce página a offset: con un 10 supuesto contra un servidor que sirve 20, el
+  scraper lee filas válidas del lugar equivocado y el archivo queda con huecos
+  que parecen completos.
+
+Y una consecuencia de que la paginación sea relativa: `--desde 87` **recorre las
+86 anteriores y las descarta**. Cuesta requests, se dice en el log y hay un
+contador. Emitir el comando con un número inventado devolvería filas
+perfectamente válidas de otro lugar del dataset.
+
+#### Un comando para cerrar lo que falta
+
+```bash
+npm run smoke:pj
+```
+
+Separa las tres cosas que se confunden y tienen arreglos distintos: **bloqueo**
+(`403` del WAF — no dice nada del adapter), **supuesto refutado** (llegamos y el
+markup no calza; es el desenlace más informativo, porque significa que ahora hay
+markup real contra el cual corregir) y **fallo de protocolo**. Desde Chile hoy
+devuelve `2` y dice «BLOQUEADO», que es la respuesta correcta.
+
+#### Dos fuentes, cuatro comandos
+
+```bash
+npm run scrape   -- --fuente pj
+npm run download -- --fuente pj
+npm run validate -- --fuente pj
+```
+
+Las rutas por defecto se derivan del nombre (`data/<fuente>.jsonl`,
+`data/<fuente>/`, un checkpoint por comando y por fuente). Cada fuente declara su
+estado de evidencia y **el CLI lo imprime antes de tocar la red**: un adapter no
+ejercitado contra su fuente que corre sin decirlo es la cobertura simulada que
+este repositorio rechaza.
+
+Las aserciones de §6.4 se extrajeron a `src/sources/aserciones.ts` para que las
+usen los dos adapters. Lo que **no** se extrajo es la máquina de recorrido: los
+protocolos difieren de verdad, y forzar al Poder Judicial dentro del molde de
+OEFA no fallaría — produciría datos.
+
+### Bloque 8
+
+Pendiente: documentación final.
 

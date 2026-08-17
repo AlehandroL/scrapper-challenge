@@ -28,7 +28,12 @@ import { JsfView } from '../jsf/view.ts';
 import { createLogger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { SourceError, RangoInvalidoError } from '../sources/errors.ts';
-import { URL_OEFA, createOefaSource } from '../sources/oefa.ts';
+import {
+  FUENTES,
+  checkpointPorDefecto,
+  descriptorDe,
+  salidaPorDefecto,
+} from '../sources/registry.ts';
 import {
   borrarCheckpoint,
   escribirCheckpoint,
@@ -38,19 +43,14 @@ import {
 } from '../store/checkpoint.ts';
 import { openJsonlWriter, readKeys } from '../store/jsonl.ts';
 
-const SALIDA_POR_DEFECTO = 'data/oefa.jsonl';
-/** Uno por comando: `scrape` y `download` avanzan a ritmos distintos sobre la
- *  misma fuente, y compartirlo haría que el atrasado se saltee páginas. */
-const CHECKPOINT_POR_DEFECTO = 'data/oefa.scrape.checkpoint.json';
+const FUENTE_POR_DEFECTO = 'oefa';
 const TAREA = 'scrape';
-
-/** Se le pasa explícito a la fuente para que el checkpoint no guarde un supuesto. */
-const PAGE_SIZE = 10;
 
 /** `0` ok · `1` la corrida falló · `2` uso incorrecto · `130` interrumpida. */
 export const SALIDA = { ok: 0, fallo: 1, uso: 2, interrumpida: 130 } as const;
 
 export interface OpcionesCli {
+  readonly fuente: string;
   /** Ausente significa «desde donde diga el checkpoint». */
   readonly desde?: number;
   readonly hasta?: number;
@@ -67,10 +67,11 @@ export interface OpcionesCli {
 const AYUDA = `
 Uso: npm run scrape -- [opciones]
 
+  --fuente <nombre>          ${FUENTES.join(' | ')}. Por defecto ${FUENTE_POR_DEFECTO}.
   --desde <n>                Primera página (1-based). Por defecto, la del checkpoint.
   --hasta <n>                Última página inclusive. Por defecto, la última.
-  --salida <ruta>            Archivo JSONL de salida. Por defecto ${SALIDA_POR_DEFECTO}.
-  --checkpoint <ruta>        Estado de reanudación. Por defecto ${CHECKPOINT_POR_DEFECTO}.
+  --salida <ruta>            Archivo JSONL. Por defecto data/<fuente>.jsonl.
+  --checkpoint <ruta>        Estado de reanudación. Por defecto data/<fuente>.scrape.checkpoint.json.
   --max-recuperaciones <n>   Reconstrucciones de la vista permitidas. Por defecto 3.
   --reiniciar                Ignora el checkpoint y recorre desde el principio.
   --dry-run                  Recorre y valida sin escribir nada.
@@ -92,6 +93,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       strict: true,
       allowPositionals: false,
       options: {
+        fuente: { type: 'string' },
         desde: { type: 'string' },
         hasta: { type: 'string' },
         salida: { type: 'string' },
@@ -115,13 +117,16 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
     throw new Error(`Argumentos inválidos: --hasta (${hasta}) es menor que --desde (${desde})`);
   }
 
+  const fuente = values.fuente ?? FUENTE_POR_DEFECTO;
+
   return {
+    fuente,
     // `exactOptionalPropertyTypes`: un `desde: undefined` explícito no compila
     // contra `desde?: number`.
     ...(desde === undefined ? {} : { desde }),
     ...(hasta === undefined ? {} : { hasta }),
-    salida: values.salida ?? SALIDA_POR_DEFECTO,
-    checkpoint: values.checkpoint ?? CHECKPOINT_POR_DEFECTO,
+    salida: values.salida ?? salidaPorDefecto(fuente),
+    checkpoint: values.checkpoint ?? checkpointPorDefecto(fuente, TAREA),
     maxRecuperaciones,
     reiniciar: values.reiniciar === true,
     dryRun: values['dry-run'] === true,
@@ -156,12 +161,16 @@ const ok = (s: string): void => console.log(`  ✓ ${s}`);
 export async function main(argv: readonly string[]): Promise<number> {
   let opciones: OpcionesCli;
   let config: ReturnType<typeof loadConfig>;
+  let descriptor: ReturnType<typeof descriptorDe>;
   try {
     opciones = parsearArgs(argv);
     if (opciones.ayuda) {
       console.log(AYUDA);
       return SALIDA.ok;
     }
+    // Antes de `loadConfig()` a propósito: una fuente mal escrita tiene que
+    // fallar por lo que el usuario escribió, no por una variable de entorno.
+    descriptor = descriptorDe(opciones.fuente);
     config = loadConfig();
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
@@ -190,11 +199,20 @@ export async function main(argv: readonly string[]): Promise<number> {
     },
   );
 
-  const view = new JsfView({ session, logger, metrics }, { pageUrl: URL_OEFA });
-  const fuente = createOefaSource(
+  const view = new JsfView({ session, logger, metrics }, { pageUrl: descriptor.urlBase });
+  const fuente = descriptor.crear(
     { view, logger, metrics },
-    { pageSize: PAGE_SIZE, maxRecuperaciones: opciones.maxRecuperaciones },
+    {
+      ...(descriptor.pageSize === undefined ? {} : { pageSize: descriptor.pageSize }),
+      maxRecuperaciones: opciones.maxRecuperaciones,
+    },
   );
+
+  // El estado de la evidencia se imprime **antes** de tocar la red. Un adapter no
+  // ejercitado contra su fuente que corre sin decirlo es la cobertura simulada
+  // que §3.3 rechaza; dicho en pantalla, quien lo corre sabe qué está midiendo.
+  paso(`Fuente: ${descriptor.nombre} — ${descriptor.urlBase}`);
+  console.log(`  evidencia: ${descriptor.evidencia}`);
 
   if (opciones.reiniciar && !opciones.dryRun) borrarCheckpoint(opciones.checkpoint);
   let checkpoint: Checkpoint | undefined;
@@ -207,7 +225,12 @@ export async function main(argv: readonly string[]): Promise<number> {
   const plan = planificarReanudacion(checkpoint, {
     fuente: fuente.nombre,
     tarea: TAREA,
-    pageSize: PAGE_SIZE,
+    // `0` = «lo deriva la corrida». Es el caso del portal del Poder Judicial,
+    // que no publica su configuración de paginación en ninguna parte legible.
+    // Guardarlo así mantiene la comprobación de compatibilidad del checkpoint
+    // —una corrida derivada no puede retomar una configurada— sin inventar el
+    // número que traduce página a offset.
+    pageSize: descriptor.pageSize ?? 0,
     ...(opciones.desde === undefined ? {} : { desde: opciones.desde }),
     ...(opciones.hasta === undefined ? {} : { hasta: opciones.hasta }),
   });
@@ -306,7 +329,7 @@ export async function main(argv: readonly string[]): Promise<number> {
           escribirCheckpoint(opciones.checkpoint, {
             fuente: fuente.nombre,
             tarea: TAREA,
-            pageSize: PAGE_SIZE,
+            pageSize: descriptor.pageSize ?? 0,
             total: pagina.total,
             ultimaPagina: pagina.numero,
             registros: nuevos + omitidos,

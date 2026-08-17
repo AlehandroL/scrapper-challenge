@@ -15,6 +15,7 @@ import { SALIDA, parsearArgs } from '../src/cli/scrape.ts';
 describe('parsearArgs', () => {
   it('sin argumentos usa los valores por defecto', () => {
     expect(parsearArgs([])).toEqual({
+      fuente: 'oefa',
       salida: 'data/oefa.jsonl',
       checkpoint: 'data/oefa.scrape.checkpoint.json',
       maxRecuperaciones: 3,
@@ -46,6 +47,7 @@ describe('parsearArgs', () => {
         '--max-recuperaciones', '1',
       ]),
     ).toEqual({
+      fuente: 'oefa',
       desde: 3,
       hasta: 9,
       salida: '/tmp/x.jsonl',
@@ -55,6 +57,29 @@ describe('parsearArgs', () => {
       dryRun: false,
       ayuda: false,
     });
+  });
+
+  /**
+   * El registro de fuentes, desde la línea de comandos.
+   *
+   * Las rutas por defecto se derivan del nombre en vez de listarse: sin eso, un
+   * `--fuente pj` escribiría sobre `data/oefa.jsonl` y mezclaría dos datasets en
+   * un archivo. El checkpoint sigue la misma regla y además lleva el nombre del
+   * comando (§5.9).
+   */
+  it('deriva las rutas por defecto del nombre de la fuente', () => {
+    const oefa = parsearArgs([]);
+    expect(oefa.fuente).toBe('oefa');
+    expect(oefa.salida).toBe('data/oefa.jsonl');
+    expect(oefa.checkpoint).toBe('data/oefa.scrape.checkpoint.json');
+
+    const pj = parsearArgs(['--fuente', 'pj']);
+    expect(pj.salida).toBe('data/pj.jsonl');
+    expect(pj.checkpoint).toBe('data/pj.scrape.checkpoint.json');
+  });
+
+  it('una ruta explícita gana sobre la derivada', () => {
+    expect(parsearArgs(['--fuente', 'pj', '--salida', '/tmp/otro.jsonl']).salida).toBe('/tmp/otro.jsonl');
   });
 
   it.each([['--dry-run', 'dryRun'], ['--help', 'ayuda'], ['--reiniciar', 'reiniciar']])(

@@ -153,9 +153,13 @@ describe('la capa de dominio no conoce el transporte', () => {
 
   it('encuentra la capa de fuentes', () => {
     expect(archivos.map((a) => a.nombre).sort()).toEqual([
+      'aserciones.ts',
       'errors.ts',
       'oefa-rows.ts',
       'oefa.ts',
+      'pj-rows.ts',
+      'pj.ts',
+      'registry.ts',
       'types.ts',
     ]);
   });
@@ -185,6 +189,63 @@ describe('la capa de dominio no conoce el transporte', () => {
       .map((a) => a.nombre);
 
     expect(culpables).toEqual([]);
+  });
+
+  /**
+   * Lo específico de cada portal, acorralado en sus dos archivos.
+   *
+   * Es la afirmación que el bloque 7 puso a prueba de verdad: con un solo adapter
+   * «la capa de fuentes es reutilizable» era una intención; con dos, se puede
+   * verificar que ninguno se filtró en el otro ni en lo común. `aserciones.ts` es
+   * el caso interesante — se extrajo de `oefa.ts` y tiene que quedar sin una sola
+   * mención a ninguno de los dos portales.
+   */
+  it.each([
+    ['oefa', ['oefa-rows.ts', 'oefa.ts', 'registry.ts']],
+    ['jurisprudencia', ['pj-rows.ts', 'pj.ts', 'registry.ts']],
+    ['formBusqueda', ['pj-rows.ts', 'pj.ts']],
+    ['expediente', ['oefa-rows.ts', 'oefa.ts']],
+    ['administrado', ['oefa-rows.ts', 'oefa.ts']],
+    ['param_uuid', ['oefa-rows.ts']],
+    ['richfaces', ['pj-rows.ts', 'pj.ts']],
+    // `pj-rows.ts` lo nombra solo en el import de `wrapRows`, que el test de
+    // abajo acota; `pj.ts`, solo para decir que no lo usa.
+    ['datatable', ['oefa-rows.ts', 'oefa.ts', 'pj-rows.ts', 'pj.ts']],
+  ])('«%s» solo aparece donde corresponde', (termino, permitidos) => {
+    const culpables = archivos
+      .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+      .map((a) => a.nombre)
+      .filter((n) => !permitidos.includes(n));
+
+    expect(culpables).toEqual([]);
+  });
+
+  /**
+   * `aserciones.ts` es la batería de §6.4 extraída de `oefa.ts` para que la use
+   * también el adapter del Poder Judicial. Todo su contenido tiene que depender
+   * del offset, del tamaño de página y del total — y de nada más.
+   */
+  it.each(['oefa', 'jurisprudencia', 'expediente', 'resoluci', 'primefaces', 'richfaces', 'data-ri'])(
+    'aserciones.ts no menciona «%s»',
+    (termino) => {
+      const aserciones = archivos.find((a) => a.nombre === 'aserciones.ts');
+      expect(aserciones).toBeDefined();
+      expect(soloCodigo(aserciones?.contenido ?? '').toLowerCase()).not.toContain(termino.toLowerCase());
+    },
+  );
+
+  /**
+   * El adapter del Poder Judicial no puede usar `jsf/datatable.ts` para leer la
+   * tabla: ese módulo es de PrimeFaces —`rowCount`, `data-ri`, el evento
+   * `page`— y el portal corre RichFaces. La única excepción es `wrapRows`, que
+   * no sabe de PrimeFaces: envuelve una tira de `<tr>` para que un parser de
+   * HTML no la descarte, y eso vale para cualquier fragmento.
+   */
+  it('pj-rows.ts solo toma wrapRows de la capa de PrimeFaces', () => {
+    const pj = archivos.find((a) => a.nombre === 'pj-rows.ts')?.contenido ?? '';
+    const importado = /import\s*\{([^}]*)\}\s*from\s*'\.\.\/jsf\/datatable\.ts'/.exec(pj)?.[1] ?? '';
+
+    expect(importado.split(',').map((s) => s.trim()).filter(Boolean)).toEqual(['wrapRows']);
   });
 });
 

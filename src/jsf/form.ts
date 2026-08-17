@@ -80,8 +80,37 @@ function formPorDefecto($: cheerio.CheerioAPI): ReturnType<cheerio.CheerioAPI> {
 
 export function parseForm(html: string, pageUrl: string, formId?: string): JsfForm | undefined {
   const $ = cheerio.load(html);
-
   const form = formId === undefined ? formPorDefecto($) : $(`form#${formId.replace(/:/g, '\\:')}`).first();
+  return leerForm($, form, pageUrl);
+}
+
+/**
+ * Todos los forms del documento que tienen `id`, en orden de aparición.
+ *
+ * Existe porque un portal puede repartir el trabajo entre varios forms de la
+ * misma vista: la página de resultados del Poder Judicial tiene tres, todos con
+ * el mismo `ViewState`, y el POST del documento va a uno distinto del de la
+ * búsqueda. Sin esto la única alternativa sería un segundo GET, que además
+ * traería una vista nueva con otro token.
+ *
+ * Los forms sin `id` se omiten: no hay forma de referirse a ellos desde un
+ * `onclick`, que es el único consumidor de esta función.
+ */
+export function parseForms(html: string, pageUrl: string): JsfForm[] {
+  const $ = cheerio.load(html);
+  const forms: JsfForm[] = [];
+  $('form').each((_, el) => {
+    const form = leerForm($, $(el), pageUrl);
+    if (form !== undefined) forms.push(form);
+  });
+  return forms;
+}
+
+function leerForm(
+  $: cheerio.CheerioAPI,
+  form: ReturnType<cheerio.CheerioAPI>,
+  pageUrl: string,
+): JsfForm | undefined {
   if (form.length === 0) return undefined;
 
   const id = form.attr('id');

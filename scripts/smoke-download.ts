@@ -86,12 +86,12 @@ async function main(): Promise<number> {
 
     // Con el token de la página 2: el servidor re-renderiza la página y no manda
     // el documento. El cuerpo llega en streaming, así que se destruye a mano.
-    const desalineada = await view.streamCommand(view.prepareCommand(fila.descarga, segunda.viewState));
+    const desalineada = await view.streamCommand(view.prepareCommand(fila.descarga, { viewState: segunda.viewState }));
     desalineada.data.destroy();
     const tipoDesalineado = String(desalineada.headers['content-type'] ?? '');
 
     // Con el de la página 1: el PDF.
-    const alineada = await view.streamCommand(view.prepareCommand(fila.descarga, primera.viewState));
+    const alineada = await view.streamCommand(view.prepareCommand(fila.descarga, { viewState: primera.viewState }));
     const cabecera: Buffer = await new Promise((resolve) => {
       alineada.data.once('data', (trozo: Buffer) => {
         alineada.data.destroy();

@@ -35,8 +35,16 @@ import { JsfView } from '../jsf/view.ts';
 import { createLogger } from '../obs/logger.ts';
 import { Metrics } from '../obs/metrics.ts';
 import { SourceError } from '../sources/errors.ts';
-import { URL_OEFA, createOefaSource } from '../sources/oefa.ts';
-import { RegistroOefaSchema, type RegistroOefa } from '../sources/oefa-rows.ts';
+import {
+  FUENTES,
+  checkpointPorDefecto,
+  colaPorDefecto,
+  descriptorDe,
+  documentosPorDefecto,
+  manifiestoPorDefecto,
+  salidaPorDefecto,
+} from '../sources/registry.ts';
+import type { RegistroBase } from '../sources/types.ts';
 import { CheckpointInvalidoError, leerCheckpoint } from '../store/checkpoint.ts';
 import { leerDlq } from '../store/dlq.ts';
 import { resumenDe, tamanoDe } from '../store/files.ts';
@@ -55,11 +63,7 @@ import {
 import { RevisionOefa } from '../validate/oefa.ts';
 import { RevisionDataset, type TotalDeclarado } from '../validate/sanity.ts';
 
-const DATASET_POR_DEFECTO = 'data/oefa.jsonl';
-const MANIFIESTO_POR_DEFECTO = 'data/oefa.descargas.jsonl';
-const DLQ_POR_DEFECTO = 'data/oefa.failed.jsonl';
-const DESCARGAS_POR_DEFECTO = 'descargas';
-const CHECKPOINT_POR_DEFECTO = 'data/oefa.scrape.checkpoint.json';
+const FUENTE_POR_DEFECTO = 'oefa';
 const PAGE_SIZE = 10;
 
 /** `0` sin errores · `1` no pudo correr · `2` uso incorrecto · `3` corrió y
@@ -68,6 +72,7 @@ const PAGE_SIZE = 10;
 export const SALIDA = { ok: 0, fallo: 1, uso: 2, conHallazgos: 3 } as const;
 
 export interface OpcionesCli {
+  readonly fuente: string;
   readonly dataset: string;
   readonly manifiesto: string;
   readonly dlq: string;
@@ -85,11 +90,12 @@ export interface OpcionesCli {
 const AYUDA = `
 Uso: npm run validate -- [opciones]
 
-  --dataset <ruta>      JSONL de registros. Por defecto ${DATASET_POR_DEFECTO}.
-  --manifiesto <ruta>   JSONL de descargas. Por defecto ${MANIFIESTO_POR_DEFECTO}.
-  --dlq <ruta>          Cola de fallos. Por defecto ${DLQ_POR_DEFECTO}.
-  --descargas <dir>     Carpeta de los archivos. Por defecto ${DESCARGAS_POR_DEFECTO}/.
-  --checkpoint <ruta>   De donde sacar el total. Por defecto ${CHECKPOINT_POR_DEFECTO}.
+  --fuente <nombre>     ${FUENTES.join(' | ')}. Por defecto ${FUENTE_POR_DEFECTO}.
+  --dataset <ruta>      JSONL de registros. Por defecto data/<fuente>.jsonl.
+  --manifiesto <ruta>   JSONL de descargas. Por defecto data/<fuente>.descargas.jsonl.
+  --dlq <ruta>          Cola de fallos. Por defecto data/<fuente>.failed.jsonl.
+  --descargas <dir>     Carpeta de los archivos. Por defecto data/<fuente>/.
+  --checkpoint <ruta>   De donde sacar el total. Por defecto data/<fuente>.scrape.checkpoint.json.
   --page-size <n>       Tamaño de página del recorrido. Por defecto ${PAGE_SIZE}.
   --total <n>           Total de filas que declara el sitio.
   --hash                Re-lee cada archivo y recalcula su sha256 (lento).
@@ -108,6 +114,7 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       strict: true,
       allowPositionals: false,
       options: {
+        fuente: { type: 'string' },
         dataset: { type: 'string' },
         manifiesto: { type: 'string' },
         dlq: { type: 'string' },
@@ -126,13 +133,15 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
 
   const { values } = parsed;
   const total = enteroPositivo(values.total, 'total');
+  const fuente = values.fuente ?? FUENTE_POR_DEFECTO;
 
   return {
-    dataset: values.dataset ?? DATASET_POR_DEFECTO,
-    manifiesto: values.manifiesto ?? MANIFIESTO_POR_DEFECTO,
-    dlq: values.dlq ?? DLQ_POR_DEFECTO,
-    descargas: values.descargas ?? DESCARGAS_POR_DEFECTO,
-    checkpoint: values.checkpoint ?? CHECKPOINT_POR_DEFECTO,
+    fuente,
+    dataset: values.dataset ?? salidaPorDefecto(fuente),
+    manifiesto: values.manifiesto ?? manifiestoPorDefecto(fuente),
+    dlq: values.dlq ?? colaPorDefecto(fuente),
+    descargas: values.descargas ?? documentosPorDefecto(fuente),
+    checkpoint: values.checkpoint ?? checkpointPorDefecto(fuente, 'scrape'),
     pageSize: enteroPositivo(values['page-size'], 'page-size') ?? PAGE_SIZE,
     ...(total === undefined ? {} : { total }),
     hash: values.hash === true,
@@ -151,26 +160,69 @@ function enteroPositivo(valor: string | undefined, nombre: string): number | und
 }
 
 /**
- * El puente entre el esquema del bloque 4 y el validador inyectado del bloque 6.
+ * El puente entre el esquema de la fuente y el validador inyectado del bloque 6.
  *
  * El esquema vive en `sources/` porque se usa **antes** de escribir el registro;
  * acá se lo reusa para leerlo. Duplicarlo en `validate/` habría dado dos
  * verdades sobre la misma forma, y la que se desactualiza es siempre la que no
  * corre en cada scrape.
+ *
+ * Con dos fuentes, cuál esquema aplicar lo decide el registro de fuentes y no un
+ * import fijo: validar el dataset del Poder Judicial contra el esquema de OEFA
+ * reportaría 1.749 registros inválidos y ningún hallazgo real.
  */
-const validarRegistro = (valor: unknown): RegistroOefa | string => {
-  const resultado = RegistroOefaSchema.safeParse(valor);
-  // El cast es por `exactOptionalPropertyTypes`: zod infiere los opcionales como
-  // `documentoUuid?: string | undefined` y la interfaz los declara `?: string`.
-  // Es sano porque JSON no puede expresar `undefined`: tras el parseo la clave
-  // está ausente o es un string. Reconstruir el objeto campo por campo sería más
-  // literal y peor — un campo nuevo en el esquema se perdería en silencio.
-  if (resultado.success) return resultado.data as RegistroOefa;
-  return resultado.error.issues
-    .slice(0, 3)
-    .map((i) => `${i.path.join('.') || '(raíz)'}: ${i.message}`)
-    .join('; ');
-};
+
+/**
+ * La parte de la revisión de dominio que **toda** fuente necesita.
+ *
+ * `revisarDocumentos` pide dos cosas —el índice por identidad y cuántos
+ * registros declaran documento— y ninguna es de OEFA. Los chequeos que sí lo son
+ * (el año de resolución, las resoluciones confidenciales) viven en
+ * `validate/oefa.ts` y no tienen equivalente en el otro portal, porque de su
+ * esquema no se reversó ningún campo con semántica.
+ *
+ * Vive en el CLI y no en `validate/` a propósito: es cableado entre una fuente y
+ * un chequeo, que es lo que el composition root hace. Poner un
+ * `RevisionGenerica` en `validate/` invitaría a que `RevisionOefa` heredara de
+ * ella, y la herencia es la forma más rápida de que un chequeo de un portal se
+ * cuele en el informe de otro.
+ */
+interface RevisionDominio {
+  readonly porId: ReadonlyMap<string, { readonly documentoUuid?: string }>;
+  readonly conDocumento: number;
+  agregar(registro: RegistroBase): void;
+  hallazgos(): Hallazgo[];
+}
+
+class RevisionBasica implements RevisionDominio {
+  readonly #porId = new Map<string, { readonly documentoUuid?: string }>();
+  #conDocumento = 0;
+
+  get porId(): ReadonlyMap<string, { readonly documentoUuid?: string }> {
+    return this.#porId;
+  }
+
+  get conDocumento(): number {
+    return this.#conDocumento;
+  }
+
+  agregar(registro: RegistroBase): void {
+    const con = registro as { readonly documentoUuid?: string };
+    this.#porId.set(registro.id, con);
+    if (typeof con.documentoUuid === 'string' && con.documentoUuid !== '') this.#conDocumento += 1;
+  }
+
+  /**
+   * Ninguno, y es deliberado.
+   *
+   * Un informe que no puede decir nada del contenido tiene que decir eso, no
+   * inventar un `✓` sobre campos que nadie reversó. Es la lección de §5.10
+   * llevada a su conclusión: «no pudo correr» es un nivel del informe.
+   */
+  hallazgos(): Hallazgo[] {
+    return [];
+  }
+}
 
 /** Las líneas del manifiesto que tienen la forma que los chequeos necesitan. */
 async function leerEntradas(ruta: string): Promise<{ entradas: EntradaDocumento[]; invalidas: number }> {
@@ -251,8 +303,10 @@ export interface Revision {
 export async function revisar(opciones: OpcionesCli, consultar?: ConsultaSitio): Promise<Revision> {
   // 1. El dataset, en streaming: lo que queda en memoria son identidades y
   //    contadores, no las 1.749 líneas.
-  const revision = new RevisionDataset(validarRegistro, { pageSize: opciones.pageSize });
-  const dominio = new RevisionOefa();
+  const descriptor = descriptorDe(opciones.fuente);
+  const revision = new RevisionDataset(descriptor.validarRegistro, { pageSize: opciones.pageSize });
+  const dominio: RevisionDominio =
+    descriptor.nombre === 'oefa' ? (new RevisionOefa() as unknown as RevisionDominio) : new RevisionBasica();
   try {
     for await (const { numero: linea, valor } of readJsonl<unknown>(opciones.dataset)) {
       const registro = revision.agregar(linea, valor);
@@ -271,7 +325,7 @@ export async function revisar(opciones: OpcionesCli, consultar?: ConsultaSitio):
     try {
       const consulta = await consultar(revision.identidades);
       totalVivo = consulta.total;
-      sitio = { titulo: `Contra el sitio — ${URL_OEFA}`, hallazgos: consulta.hallazgos };
+      sitio = { titulo: `Contra el sitio — ${descriptor.urlBase}`, hallazgos: consulta.hallazgos };
     } catch (e) {
       const detalle = e instanceof SourceError ? `${e.name} [${e.kind}]: ${e.message}` : String(e);
       sitio = {
@@ -328,13 +382,19 @@ export async function main(argv: readonly string[]): Promise<number> {
   }
 
   if (!existsSync(opciones.dataset)) {
-    console.error(`\n✗ No existe ${opciones.dataset}. Correr «npm run scrape» primero.`);
+    // El comando que se sugiere lleva la fuente: con dos portales, un
+    // «npm run scrape» pelado recorrería OEFA y dejaría el archivo del otro
+    // igual de ausente.
+    const sufijo = opciones.fuente === 'oefa' ? '' : ` -- --fuente ${opciones.fuente}`;
+    console.error(`\n✗ No existe ${opciones.dataset}. Correr «npm run scrape${sufijo}» primero.`);
     return SALIDA.fallo;
   }
 
   const { secciones, nota } = await revisar(
     opciones,
-    opciones.contraElSitio ? preguntarleAlSitio : undefined,
+    opciones.contraElSitio
+      ? (identidades) => preguntarleAlSitio(descriptorDe(opciones.fuente), identidades)
+      : undefined,
   );
 
   for (const seccion of secciones) {
@@ -381,6 +441,7 @@ function crearSonda(opciones: OpcionesCli): Sonda | undefined {
  * algo nuevo y todos los índices se corrieron.
  */
 async function preguntarleAlSitio(
+  descriptor: ReturnType<typeof descriptorDe>,
   identidades: ReadonlySet<string>,
 ): Promise<{ total: number; hallazgos: Hallazgo[] }> {
   const config = loadConfig();
@@ -406,8 +467,8 @@ async function preguntarleAlSitio(
     },
   );
 
-  const view = new JsfView({ session, logger, metrics }, { pageUrl: URL_OEFA });
-  const fuente = createOefaSource({ view, logger, metrics });
+  const view = new JsfView({ session, logger, metrics }, { pageUrl: descriptor.urlBase });
+  const fuente = descriptor.crear({ view, logger, metrics });
 
   for await (const pagina of fuente.recorrer({ hasta: 1 })) {
     const faltan = pagina.filas.map((f) => f.registro.id).filter((id) => !identidades.has(id));
