@@ -11,8 +11,9 @@
 # evitar. Y `smoke:download` además baja documentos de varios megas. Se corren a
 # mano cuando se quiere evidencia contra el sitio vivo.
 #
-# `smoke:pj` tiene además una razón propia: desde cualquier runner de GitHub el
-# portal contesta 403, así que en CI solo probaría que el bloqueo sigue ahí.
+# `smoke:pj` tiene además una razón propia: es la fuente secundaria y exige
+# salida de red peruana. Desde cualquier runner de GitHub el portal contesta 403,
+# así que en CI solo probaría que el bloqueo sigue ahí.
 
 name: CI
 

@@ -8,6 +8,11 @@
  * haberse ejercitado contra su fuente. Que sea `--fuente pj` y no una edición de
  * `cli/scrape.ts` es lo que lo pone al alcance de quien tenga salida peruana.
  *
+ * **`oefa` es la fuente principal y el default de los cuatro CLIs.** El
+ * enunciado ofrece los dos portales; esta entrega tomó el abierto porque el otro
+ * exige VPN peruana, y `evidencia` lo declara en pantalla antes de tocar la red
+ * para que nadie confunda cuál se ejercitó.
+ *
  * Lo que el registro **no** hace es construir sesiones ni vistas: recibe la
  * `JsfView` ya armada, igual que los adapters. El cableado de transporte sigue
  * viviendo en `cli/`, que es el único lugar donde corresponde, y por eso este
@@ -76,8 +81,8 @@ const DESCRIPTORES: Record<NombreFuente, DescriptorFuente> = {
     urlBase: URL_OEFA,
     pageSize: 10,
     evidencia:
-      'verificada contra el sitio vivo: corrida completa de 176 páginas y 1.753 filas, ' +
-      'más 30 documentos descargados',
+      'SITIO PRINCIPAL, verificado contra el sitio vivo: corrida completa de 176 páginas ' +
+      'y 1.753 filas, más 30 documentos descargados',
     validarRegistro: (valor) => validar(RegistroOefaSchema, valor),
     crear: (deps, opts = {}) =>
       createOefaSource(deps, {
@@ -90,9 +95,9 @@ const DESCRIPTORES: Record<NombreFuente, DescriptorFuente> = {
     urlBase: URL_PJ,
     pageSize: undefined,
     evidencia:
-      'NO ejercitado contra su fuente: el portal responde 403 desde Chile y no se contrató proxy (§3.3). ' +
-      'Escrito contra markup real del archivo web (fixtures/pj/); las filas de resultado y la paginación ' +
-      'siguen sin verificar',
+      'FUENTE SECUNDARIA, NO ejercitada contra su sitio: el portal exige salida de red peruana y ' +
+      'esta entrega no contrató VPN ni proxy. Escrito contra markup real del archivo web ' +
+      '(fixtures/pj/); las filas de resultado y la paginación siguen sin verificar',
     validarRegistro: (valor) => validar(RegistroPjSchema, valor),
     crear: (deps, opts = {}) =>
       createPjSource(deps, {

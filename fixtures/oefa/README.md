@@ -1,9 +1,9 @@
 # Fixtures — publico.oefa.gob.pe
 
-Respuestas HTTP reales del Repositorio Digital de OEFA, capturadas sin navegador.
-Son la base de los tests sin red: cuando el sitio cambie, el ciclo de corrección
-baja de minutos a segundos porque el parser se puede ejercitar contra estos
-archivos.
+Respuestas HTTP reales del Repositorio Digital de OEFA —el **sitio principal** de
+esta entrega—, capturadas sin navegador. Son la base de los tests sin red: cuando
+el sitio cambie, el ciclo de corrección baja de minutos a segundos porque el
+parser se puede ejercitar contra estos archivos.
 
 - **Origen:** `https://publico.oefa.gob.pe/repdig/consulta/consultaTfa.xhtml`
 - **Captura:** 12-ago-2026, desde Santiago de Chile (AS267724)

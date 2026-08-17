@@ -1,5 +1,7 @@
 /**
- * El adapter del Registro de Infractores Ambientales de OEFA.
+ * El adapter del Registro de Infractores Ambientales de OEFA — la **fuente
+ * principal** del proyecto y el default de los cuatro CLIs. Es la única que se
+ * ejercitó entera contra su sitio: 176 páginas, 1.753 filas y 30 documentos.
  *
  * Es la máquina que convierte «una vista JSF viva» en «páginas de registros»:
  * bootstrap, búsqueda, y un evento de paginación por página. Todo lo que sabe de

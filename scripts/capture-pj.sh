@@ -2,9 +2,9 @@
 #
 # capture-pj.sh — Captura del markup real de jurisprudencia.pj.gob.pe.
 #
-# El portal objetivo responde 403 desde Chile (§2.2): el WAF discrimina por
-# atributo de la IP de origen, no por características del cliente. Eso deja el
-# adapter del bloque 7 sin markup contra el cual escribirse… salvo por una
+# El portal secundario responde 403 sin salida peruana (§2.2): el WAF discrimina
+# por atributo de la IP de origen, no por características del cliente. Eso deja
+# el adapter del bloque 7 sin markup contra el cual escribirse… salvo por una
 # fuente que el documento de estrategia no consideró: **el archivo de Wayback
 # sirve los snapshots desde web.archive.org, no desde el sitio bloqueado.**
 #

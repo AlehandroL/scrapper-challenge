@@ -1,14 +1,15 @@
 /**
  * El adapter del portal de Jurisprudencia Nacional Sistematizada del Poder
- * Judicial del Perú — el sitio objetivo del desafío.
+ * Judicial del Perú — la **fuente secundaria** del proyecto.
  *
  * ## Lo primero, porque cambia cómo hay que leer todo lo demás
  *
- * **Este archivo nunca corrió contra su fuente.** El portal responde `403` desde
- * Chile —una regla del WAF por atributo de la IP de origen, con el
- * fingerprinting TLS/JA3 descartado con evidencia (§2.2)— y para esta entrega se
- * decidió no contratar VPN ni proxy residencial (§3.3). Decir otra cosa sería el
- * número inflado que el documento de estrategia rechaza.
+ * **Este archivo nunca corrió contra su fuente.** El portal responde `403` sin
+ * salida de red peruana —una regla del WAF por atributo de la IP de origen, con
+ * el fingerprinting TLS/JA3 descartado con evidencia (§2.2)— y esta entrega tomó
+ * el otro portal del enunciado, OEFA, como sitio principal en vez de contratar
+ * una VPN (§3.3). Decir otra cosa sería el número inflado que el documento de
+ * estrategia rechaza.
  *
  * Lo que sí hay es markup real del portal, capturado del archivo web y
  * versionado en `fixtures/pj/`. No es el sitio de hoy —el snapshot más nuevo es
