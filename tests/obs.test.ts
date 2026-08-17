@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cerrarLogs, createLogger, redactUrl, vaciarLogs } from '../src/obs/logger.ts';
 import { Metrics, lineasDeSalud } from '../src/obs/metrics.ts';
@@ -69,6 +71,26 @@ describe('loadConfig', () => {
   it('rechaza un PROXY_URL que no es una URL', () => {
     expect(() => loadConfig({ PROXY_URL: 'no-es-url' })).toThrow(/PROXY_URL/);
   });
+
+  /**
+   * La tasa inicial tiene que caer dentro del rango del ajuste AIMD.
+   *
+   * Con `HTTP_RPS=10` y el techo por defecto en 5, el limiter arrancaba al doble
+   * de lo permitido y solo bajaba después de una racha de éxitos: la ráfaga
+   * inicial —lo que un WAF mira— salía por encima del techo que el operador creyó
+   * fijar. Por debajo del piso el efecto es el inverso y más raro todavía: el
+   * primer 429 *sube* la tasa, porque el AIMD la lleva al mínimo configurado.
+   */
+  it.each([
+    ['por encima del techo', { HTTP_RPS: '10' }],
+    ['por debajo del piso', { HTTP_RPS: '0.01' }],
+  ])('rechaza una tasa inicial %s del rango AIMD', (_caso, env) => {
+    expect(() => loadConfig(env)).toThrow(/HTTP_RPS/);
+  });
+
+  it('acepta una tasa inicial que cae dentro del rango', () => {
+    expect(loadConfig({ HTTP_RPS: '10', HTTP_MAX_RPS: '20' }).HTTP_RPS).toBe(10);
+  });
 });
 
 describe('lineasDeSalud', () => {
@@ -114,5 +136,44 @@ describe('cierre del logging', () => {
 
     await expect(vaciarLogs(logger)).resolves.toBeUndefined();
     await expect(cerrarLogs()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Toda variable validada tiene que **llegar a algún lado**.
+ *
+ * `HTTP_MAX_RETRY_AFTER_MS` se validaba con zod y estaba documentada en el
+ * README, pero ningún CLI se la pasaba a `createSession`: la sesión caía a
+ * `RETRY_DEFAULTS` y el tope quedaba clavado en los 120 s del default. Ponerla
+ * en el entorno no hacía nada, en silencio y sin error.
+ *
+ * Ese es el modo de falla peor de una configuración: no el valor inválido —de
+ * eso ya se ocupan los tests de arriba— sino el valor válido que se ignora.
+ * Quien lo setea cree haber acotado la espera y no la acotó, y el síntoma
+ * aparece recién cuando un portal manda un `Retry-After` grande.
+ *
+ * El test lee los fuentes en vez de ejercitar los cuatro `main()` porque lo que
+ * hay que impedir es exactamente eso: que alguien agregue una variable al schema
+ * y se olvide de cablearla. Es el mismo criterio de `architecture.test.ts`.
+ */
+describe('el cableado de la configuración', () => {
+  const DIR_SRC = join(import.meta.dirname, '..', 'src');
+  const CLIS = ['scrape.ts', 'download.ts', 'validate.ts', 'retry-failed.ts'];
+
+  const declaradas = (): string[] => {
+    const fuente = readFileSync(join(DIR_SRC, 'config.ts'), 'utf8');
+    const cuerpo = /const EnvSchema = z\.object\(\{([\s\S]*?)\n\}\);/.exec(fuente)?.[1] ?? '';
+    return [...cuerpo.matchAll(/^  ([A-Z][A-Z0-9_]*):/gm)].map((m) => m[1] ?? '');
+  };
+
+  it('encuentra las variables del schema', () => {
+    expect(declaradas()).toContain('HTTP_MAX_RETRY_AFTER_MS');
+  });
+
+  it.each(CLIS)('%s consume todas las variables validadas', (cli) => {
+    const fuente = readFileSync(join(DIR_SRC, 'cli', cli), 'utf8');
+    const huerfanas = declaradas().filter((v) => !fuente.includes(`config.${v}`));
+
+    expect(huerfanas).toEqual([]);
   });
 });

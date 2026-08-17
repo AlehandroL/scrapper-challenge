@@ -426,7 +426,7 @@ class OefaSource implements Fuente<RegistroOefa> {
       esUltima: numero === ultima,
       // El token que corresponde a **esta** página. Se captura acá y no se vuelve
       // a leer: para cuando el consumidor pida un PDF, `view.viewState` ya rotó.
-      viewState: this.#view.viewState ?? '',
+      viewState: this.#view.viewStateRequerido('construirPagina'),
       generacion: this.#view.snapshot().generation,
     };
   }

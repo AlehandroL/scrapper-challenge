@@ -57,8 +57,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .join('\n');
     throw new Error(`Configuración inválida en el entorno:\n${detalle}`);
   }
-  if (resultado.data.HTTP_MIN_RPS > resultado.data.HTTP_MAX_RPS) {
+  const { HTTP_RPS, HTTP_MIN_RPS, HTTP_MAX_RPS } = resultado.data;
+  if (HTTP_MIN_RPS > HTTP_MAX_RPS) {
     throw new Error('Configuración inválida: HTTP_MIN_RPS no puede superar a HTTP_MAX_RPS.');
+  }
+  // `HTTP_RPS` es la tasa **inicial** y el par MIN/MAX es el rango del ajuste
+  // AIMD: una inicial fuera del rango no es una preferencia, es una
+  // contradicción. Sin esta guarda el limiter arranca donde le digan y el ajuste
+  // recién lo corrige después de una racha de éxitos o del primer 429 — o sea
+  // que la ráfaga inicial, que es justo lo que un WAF castiga, sale por encima
+  // del techo que el operador creyó fijar. El hueco es simétrico: por debajo del
+  // piso, el primer 429 *sube* la tasa, que es lo contrario de lo que se espera
+  // de un backoff. Vale el mismo argumento de arriba: fallar al arrancar cuesta
+  // un segundo; fallar en la página 900, una corrida.
+  if (HTTP_RPS < HTTP_MIN_RPS || HTTP_RPS > HTTP_MAX_RPS) {
+    throw new Error(
+      `Configuración inválida: HTTP_RPS (${HTTP_RPS}) tiene que caer entre ` +
+        `HTTP_MIN_RPS (${HTTP_MIN_RPS}) y HTTP_MAX_RPS (${HTTP_MAX_RPS}).`,
+    );
   }
   return resultado.data;
 }

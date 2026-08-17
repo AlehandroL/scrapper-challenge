@@ -98,6 +98,14 @@ export function fullJitter(
 }
 
 /**
+ * Cuánto se puede estirar el `Retry-After` recibido, como fracción de sí mismo.
+ *
+ * Un 20% sobre un `Retry-After: 5` reparte los reintentos en una ventana de un
+ * segundo: alcanza para romper la sincronía sin que la corrida lo note.
+ */
+const JITTER_RETRY_AFTER = 0.2;
+
+/**
  * Parsea `Retry-After` en sus dos formas (RFC 9110 §10.2.3): delta-seconds o
  * HTTP-date. Devuelve `undefined` si el header falta o no es interpretable —
  * nunca `0`, que se confundiría con «reintentá ya».
@@ -152,8 +160,23 @@ function demora(
 
   // §5.6: «`Retry-After` tiene prioridad sobre el cálculo propio. El servidor
   // está diciendo explícitamente cuánto esperar.»
+  //
+  // Prioridad no es obediencia al milisegundo. Este es el único caso en que N
+  // sesiones reciben **el mismo número**, así que respetarlo exacto es la receta
+  // del rebaño sincronizado que `fullJitter` existe para evitar: todas esperan lo
+  // mismo y vuelven juntas, y el 429 siguiente las encuentra otra vez alineadas.
+  //
+  // La franja es **aditiva y solo hacia arriba**, al revés del full jitter de
+  // abajo: esperar *menos* de lo que el servidor pidió sería peor que no
+  // desincronizar nada, porque el header es un pedido explícito y no una
+  // estimación nuestra. El tope se reaplica después de sumarla, para que siga
+  // siendo un techo duro y no un techo aproximado.
+  //
+  // El `CircuitOpenError` de arriba no necesita lo mismo: ahí la estampida ya la
+  // corta el breaker, que deja pasar una sonda por vez (`#sondaEnVuelo`).
   if (error instanceof ThrottledError && error.retryAfterMs !== undefined) {
-    return Math.min(opts.maxRetryAfterMs, error.retryAfterMs);
+    const pedido = Math.min(opts.maxRetryAfterMs, error.retryAfterMs);
+    return Math.min(opts.maxRetryAfterMs, pedido + Math.floor(rng() * pedido * JITTER_RETRY_AFTER));
   }
 
   return fullJitter(attempt, budget.baseMs, opts.capMs, rng);

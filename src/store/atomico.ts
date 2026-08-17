@@ -35,5 +35,18 @@ export function escribirAtomico(ruta: string, contenido: string): void {
     if (!completo) rmSync(temporal, { force: true });
   }
 
-  renameSync(temporal, ruta);
+  // El `rename` va fuera del `try` de arriba a propósito: renombrar con el
+  // descriptor todavía abierto falla en Windows, así que el `closeSync` del
+  // `finally` tiene que haber corrido primero. Pero eso lo deja también fuera de
+  // su limpieza, y un `rename` que falla —permisos del directorio, el destino
+  // ocupado, el directorio borrado a mitad— dejaba el `.tmp` huérfano con el
+  // contenido nuevo entero adentro. El error se relanza tal cual: Node ya nombra
+  // el código y las dos rutas, y qué hacer con un fallo de disco lo decide el
+  // llamador.
+  try {
+    renameSync(temporal, ruta);
+  } catch (error) {
+    rmSync(temporal, { force: true });
+    throw error;
+  }
 }

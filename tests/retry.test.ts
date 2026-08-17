@@ -105,12 +105,45 @@ describe('withRetry', () => {
         return 'listo';
       },
       RETRY_DEFAULTS,
-      { sleep, rng: () => 1 },
+      { sleep, rng: () => 0 },
     );
 
     expect(resultado).toBe('listo');
-    // Con rng=1 el jitter habría dado 1000 ms; se respeta el header.
+    // Con rng=0 la franja de desincronización es 0 y queda el header pelado. El
+    // backoff propio habría dado su tope exponencial, no 7 s.
     expect(esperas).toEqual([7_000]);
+  });
+
+  /**
+   * El `Retry-After` es el único caso en que N sesiones reciben el mismo número,
+   * o sea justo donde el rebaño se re-sincroniza. Se le suma una franja, pero
+   * **solo hacia arriba**: esperar menos de lo que el servidor pidió sería peor
+   * que no desincronizar nada, porque el header es un pedido explícito.
+   */
+  it('estira el Retry-After para desincronizar, y nunca lo acorta', async () => {
+    const esperasDe = async (rng: () => number): Promise<number[]> => {
+      const { esperas, sleep } = siestaFalsa();
+      let intentos = 0;
+      await withRetry(
+        async () => {
+          if (++intentos === 1) throw new ThrottledError(CTX, 429, 7_000);
+          return 'listo';
+        },
+        RETRY_DEFAULTS,
+        { sleep, rng },
+      );
+      return esperas;
+    };
+
+    // Con rng=1 se suma la franja entera: 7000 + 20%.
+    expect(await esperasDe(() => 1)).toEqual([8_400]);
+
+    // Sea cual sea el sorteo, nunca por debajo de lo que pidió el servidor.
+    for (const r of [0, 0.25, 0.5, 0.99]) {
+      const [espera] = await esperasDe(() => r);
+      expect(espera).toBeGreaterThanOrEqual(7_000);
+      expect(espera).toBeLessThanOrEqual(8_400);
+    }
   });
 
   it('acota un Retry-After desmedido', async () => {
@@ -252,7 +285,10 @@ describe('withRetry', () => {
         return 'listo';
       },
       RETRY_DEFAULTS,
-      { sleep, onRetry },
+      // `rng` fijo en 0: lo que se prueba acá es que el hook reporte cada
+      // reintento, no cuánto se espera. Sin inyectarlo, la franja de
+      // desincronización del `Retry-After` haría el aserto no determinista.
+      { sleep, onRetry, rng: () => 0 },
     );
 
     expect(onRetry).toHaveBeenCalledTimes(2);

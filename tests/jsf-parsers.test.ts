@@ -290,6 +290,30 @@ describe('form', () => {
     expect(parseForm('<html><body>nada</body></html>', PAGE_URL)).toBeUndefined();
     expect(parseForm(BOOTSTRAP, PAGE_URL, 'formQueNoExiste')).toBeUndefined();
   });
+
+  /**
+   * Un `ViewState` presente pero vacío tiene que leerse como **ausente**, no
+   * como el token `''`.
+   *
+   * La diferencia parece cosmética y no lo es: `undefined` hace que la vista se
+   * declare no lista y que todo lo que dependa de ella falle con nombre propio,
+   * mientras que `''` es un valor que se cuela por cualquier guarda escrita con
+   * `??` —el string vacío no es nullish— y termina en un POST con el campo
+   * vacío. El portal contesta eso con un `200` y la página re-renderizada: el
+   * fallo silencioso que el repo persigue en todas partes.
+   *
+   * El comportamiento correcto ya estaba implementado; lo que faltaba era este
+   * test. Sin él, «simplificar» el filtro del string vacío no rompía nada.
+   */
+  it('un ViewState con value vacío se lee como ausente, no como token vacío', () => {
+    const doc =
+      `<html><body><form id="vistaJsf" action="/vista.xhtml"><input name="dato" value="y"/>` +
+      `<input type="hidden" name="javax.faces.ViewState" value=""/></form></body></html>`;
+
+    const form = parseForm(doc, PAGE_URL);
+    expect(form).toBeDefined();
+    expect(form!.viewState).toBeUndefined();
+  });
 });
 
 describe('datatable', () => {

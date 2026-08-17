@@ -9,7 +9,7 @@
  */
 
 import { Readable } from 'node:stream';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -58,6 +58,25 @@ describe('guardarStream', () => {
 
   it('no deja rastro del temporal', async () => {
     await guardarStream(Readable.from([Buffer.from(PDF)]), destino, { magic: '%PDF-' });
+    expect(existsSync(`${destino}${SUFIJO_TEMPORAL}`)).toBe(false);
+  });
+
+  /**
+   * El fallo que quedaba fuera de la limpieza: el del `rename` final.
+   *
+   * Corre después del `closeSync` —renombrar con el descriptor abierto falla en
+   * Windows—, así que también quedaba fuera del `finally` que borra el temporal.
+   * Un `.parcial` sobreviviente se lee como la evidencia de un corte, y acá era
+   * exactamente lo contrario: el contenido ya estaba entero, validado y
+   * `fsync`-eado, solo que con el nombre equivocado.
+   *
+   * El caso se arma sin mocks: si el destino ya es un directorio, el `rename` de
+   * un archivo sobre él falla de verdad en el sistema de archivos real.
+   */
+  it('no deja el temporal si el rename final falla', async () => {
+    mkdirSync(destino, { recursive: true });
+
+    await expect(guardarStream(Readable.from([Buffer.from(PDF)]), destino, { magic: '%PDF-' })).rejects.toThrow();
     expect(existsSync(`${destino}${SUFIJO_TEMPORAL}`)).toBe(false);
   });
 
