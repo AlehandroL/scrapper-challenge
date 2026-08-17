@@ -12,6 +12,16 @@ descargaron documentos y contra el que corre la validación. El portal del Poder
 exige salida de red peruana, no se contrató VPN para esta entrega, y su adapter queda como
 secundario — ver [limitaciones conocidas](#limitaciones-conocidas).
 
+## Quickstart
+
+Requiere **Node ≥ 20**. No hay servicios que levantar ni credenciales que configurar.
+
+```bash
+npm ci                       # instalar
+npm run scrape -- --hasta 3  # tres páginas del portal a data/oefa.jsonl
+npm run validate             # sanity checks sobre lo escrito, sin red
+```
+
 ## Qué produjo
 
 | | |
@@ -19,35 +29,28 @@ secundario — ver [limitaciones conocidas](#limitaciones-conocidas).
 | **Dataset** | [`data/oefa.jsonl`](data/oefa.jsonl) — 1.749 registros, de 1.753 filas recorridas en 176 páginas |
 | **Documentos** | [`data/oefa.descargas.jsonl`](data/oefa.descargas.jsonl) — 30 PDFs, 232,6 MB, con tamaño y `sha256` |
 | **Corrida del dataset** | 177 requests a 1 req/s, **cero 429 y cero reintentos**, ~6 min |
-| **Suite** | 572 tests **sin red**, ~2 s, contra Node 20, 22 y 24 en CI |
+| **Suite** | 575 tests **sin red**, ~2 s, contra Node 20, 22 y 24 en CI |
 | **Sanity checks** | `npm run validate` — 25 chequeos, 0 errores y 2 avisos conocidos sobre lo entregado |
-
-## Instalación
-
-Requiere **Node ≥ 20**. No hay servicios que levantar ni credenciales que configurar.
-
-```bash
-npm ci
-```
 
 ## Cómo se corre
 
-```bash
-npm run scrape -- --hasta 3            # tres páginas a data/oefa.jsonl
-npm run download -- --max-descargas 2  # dos PDFs a data/oefa/ — pesan ~9 MB cada uno
-npm run validate                       # sanity checks sobre lo escrito, sin red
-```
-
 Sin `--hasta`, `scrape` recorre el dataset completo: 176 páginas, ~6 minutos. Es
 **reanudable e idempotente**: repetirlo completa lo que falte sin duplicar registros ni
-volver a pedir páginas ya leídas. Lo que falle en la descarga queda en una cola y se
-reintenta con `npm run retry-failed`.
+volver a pedir páginas ya leídas.
+
+```bash
+npm run download -- --max-descargas 2  # dos PDFs a data/oefa/ — pesan ~9 MB cada uno
+```
+
+Lo que falle en la descarga queda en una cola y se reintenta con `npm run retry-failed`.
 
 Verificación sin red:
 
 ```bash
-npm test          # 572 tests, ~2 s
-npm run typecheck # tsc --noEmit
+npm test             # 575 tests, ~2 s
+npm run typecheck    # tsc --noEmit
+npm run lint         # oxlint
+npm run format:check # prettier --check
 ```
 
 Todos los comandos aceptan `--help`.
@@ -63,15 +66,20 @@ src/
   store/      JSONL · archivos · cola de fallos · checkpoint
   validate/   sanity checks, sin I/O
   obs/        logging · métricas
-tests/        572 tests, ninguno toca la red
+tests/        575 tests, ninguno toca la red
 fixtures/     markup real de los dos portales, versionado
 scripts/      captura de fixtures, smokes contra el sitio vivo, diagnóstico de acceso
-docs/         el proceso y la bitácora
+docs/         el proceso, la bitácora y el índice de referencias «§»
 ```
 
 `jsf/` no sabe nada de resoluciones ambientales y `sources/` no sabe nada de reintentos ni
 de cookies. [`tests/architecture.test.ts`](tests/architecture.test.ts) lo verifica en cada
 corrida; el detalle está en [`docs/proceso.md`](docs/proceso.md#arquitectura).
+
+Los comentarios del código citan secciones con la forma `§5.4`: apuntan al documento de
+estrategia con el que se planificó el trabajo, que no se versiona.
+[`docs/referencias.md`](docs/referencias.md) dice qué afirma cada una y dónde está
+reproducida acá dentro, y un test exige que no quede ninguna sin fila.
 
 ## Referencia
 
@@ -79,8 +87,10 @@ corrida; el detalle está en [`docs/proceso.md`](docs/proceso.md#arquitectura).
 
 | Comando | Red | Qué hace |
 |---|---|---|
-| `npm test` | no | La suite completa: 572 tests, ~2 s |
+| `npm test` | no | La suite completa: 575 tests, ~2 s |
 | `npm run typecheck` | no | `tsc --noEmit` |
+| `npm run lint` | no | `oxlint` sobre `src/`, `tests/` y `scripts/` |
+| `npm run format` | no | `prettier --write` sobre los `.ts`. `format:check` es la variante que no escribe |
 | `npm run scrape` | sí | Recorre la fuente y escribe el dataset JSONL |
 | `npm run download` | sí | Recorre y baja los documentos intercalado, con manifiesto y cola de fallos |
 | `npm run retry-failed` | sí | Consume la cola: re-navega hasta la página de cada registro |
@@ -213,7 +223,7 @@ errores: tener sanity checks y haberlos corrido no son lo mismo.
 |---|---|
 | **Funcionalidad** | Corrida real con output commiteado: [`data/oefa.jsonl`](data/oefa.jsonl) (1.749 registros de 176 páginas) y 30 documentos con hash. Reproducible con `npm run scrape` |
 | **Manejo de 429** | Token bucket con **AIMD** + **full jitter** + prioridad de `Retry-After` + circuit breaker global + cola de fallos + `npm run retry-failed`. Escrito a mano en [`src/http/`](src/http/) porque delegarlo a `bottleneck` escondería justo lo que se evalúa |
-| **Código limpio** | Separación transporte / protocolo / dominio / persistencia, sostenida por [`tests/architecture.test.ts`](tests/architecture.test.ts) y puesta a prueba contra un segundo portal |
+| **Código limpio** | Separación transporte / protocolo / dominio / persistencia, sostenida por [`tests/architecture.test.ts`](tests/architecture.test.ts) y puesta a prueba contra un segundo portal. `oxlint` y `prettier --check` corren en CI junto al `tsc` en modo estricto máximo |
 | **Robustez** | Recuperación de la vista caída en sus tres formas, validación de magic bytes del PDF, escritura atómica, checkpointing, y **diez condiciones de drift** que detienen la corrida antes de escribir datos vacíos |
 | **Documentación** | Este README, [`docs/proceso.md`](docs/proceso.md), la [bitácora](docs/bitacora.md), y los README de [`fixtures/oefa/`](fixtures/oefa/README.md) y [`fixtures/pj/`](fixtures/pj/README.md) |
 
@@ -268,5 +278,7 @@ que nunca se ejercitó compra menos que declararlo; queda anotado también en
 - **[`docs/proceso.md`](docs/proceso.md)** — cómo se descubrió el protocolo, qué supuestos
   refutó el sitio, la arquitectura y el diagnóstico de acceso.
 - **[`docs/bitacora.md`](docs/bitacora.md)** — el registro bloque a bloque del desarrollo.
+- **[`docs/referencias.md`](docs/referencias.md)** — qué afirma cada `§N.N` que cita el código y
+  dónde está reproducida en el repo.
 - **[`fixtures/oefa/README.md`](fixtures/oefa/README.md)** y
   **[`fixtures/pj/README.md`](fixtures/pj/README.md)** — qué demuestra cada fixture.

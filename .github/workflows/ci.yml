@@ -1,8 +1,19 @@
-# Typecheck y suite completa en cada push y cada PR.
+# Typecheck, linter, formato, suite completa y sanity checks en cada push y cada PR.
 #
 # Sin esto, las aserciones —incluidas las de `tests/architecture.test.ts`, que
 # son las que impiden que la separación de capas se degrade en el tercer apuro—
 # solo corrían cuando alguien se acordaba de ejecutarlas.
+#
+# `lint` es oxlint y `format:check` es Prettier. Por qué no ESLint: este repo fija
+# `typescript@7`, el compilador nativo en Go, cuyo paquete npm ya no expone la API
+# de compilador; `typescript-eslint` declara peer `typescript >=4.8.4 <6.1.0` y el
+# `npm ci` de acá arriba fallaría con ERESOLVE. El detalle está en `.oxlintrc.json`.
+#
+# `validate` corre el informe de sanity checks sobre los archivos commiteados. Ya
+# había un test que lo hacía —`tests/dataset.test.ts`—, pero enterrado dentro de
+# vitest: como paso propio, el log de CI muestra el informe entero, que es la
+# diferencia entre «la suite pasó» y «esto es lo que dice el dataset entregado».
+# Sale `0` con los dos avisos conocidos; solo un error lo rompe.
 #
 # **Los smokes quedan deliberadamente fuera.** Los cinco (`smoke:oefa`,
 # `smoke:jsf`, `smoke:source`, `smoke:download`, `smoke:pj`) dependen de la red y
@@ -50,4 +61,10 @@ jobs:
 
       - run: npm run typecheck
 
+      - run: npm run lint
+
+      - run: npm run format:check
+
       - run: npm test
+
+      - run: npm run validate
