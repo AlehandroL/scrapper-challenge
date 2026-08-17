@@ -67,7 +67,14 @@ export const CABECERAS_ESPERADAS = [
 export const COLUMNAS_ESPERADAS = CABECERAS_ESPERADAS.length;
 
 /** Índices de columna. Nombrarlos evita el `celdas[3]` sin contexto. */
-const COL = { nro: 0, expediente: 1, administrado: 2, unidad: 3, sector: 4, resolucion: 5 } as const;
+const COL = {
+  nro: 0,
+  expediente: 1,
+  administrado: 2,
+  unidad: 3,
+  sector: 4,
+  resolucion: 5,
+} as const;
 
 export interface CamposOefa {
   readonly expediente: string;
@@ -135,7 +142,11 @@ export const RegistroOefaSchema = RegistroBaseSchema.extend({
  * legítimos y dejar de detectar que el `onclick` cambió de forma.
  */
 export type DocumentoFila =
-  | { readonly estado: 'ok'; readonly uuid: string; readonly comando: Readonly<Record<string, string>> }
+  | {
+      readonly estado: 'ok';
+      readonly uuid: string;
+      readonly comando: Readonly<Record<string, string>>;
+    }
   /** La celda no trae enlace: el sitio publica la resolución como confidencial. */
   | { readonly estado: 'sin-enlace' }
   /** Hay enlace pero sus parámetros no se dejan leer: eso sí es drift. */
@@ -359,7 +370,9 @@ function leerComando($tr: Seleccion): DocumentoFila {
  * del script. Que dos caminos distintos coincidan es lo que convierte el total
  * en un dato verificado en vez de en uno leído.
  */
-export function parsePaginador(texto: string): { pagina: number; paginas: number; total: number } | undefined {
+export function parsePaginador(
+  texto: string,
+): { pagina: number; paginas: number; total: number } | undefined {
   const m = texto.match(/(\d+)\s+de\s+([\d.,]+)\s*\(\s*([\d.,]+)\s+registros?\s*\)/i);
   if (m?.[1] === undefined || m[2] === undefined || m[3] === undefined) return undefined;
 

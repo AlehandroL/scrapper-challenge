@@ -85,7 +85,8 @@ export class Metrics {
  * pasó.
  */
 export function lineasDeSalud(s: MetricsSnapshot): string[] {
-  const contadores = Object.keys(s.contadores).length === 0 ? '(ninguno)' : JSON.stringify(s.contadores);
+  const contadores =
+    Object.keys(s.contadores).length === 0 ? '(ninguno)' : JSON.stringify(s.contadores);
   return [
     `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  fallidos=${s.fallidos}  reintentos=${s.reintentos}`,
     `  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`,

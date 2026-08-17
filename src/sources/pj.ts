@@ -187,7 +187,14 @@ class PjSource implements Fuente<RegistroPj> {
     const { desde, hasta } = this.#rango(opts, ultima);
 
     this.#log.info(
-      { total: this.#total, pageSize: this.#pageSize, desde, hasta, ultima, derivado: this.#pageSizeConfigurado === undefined },
+      {
+        total: this.#total,
+        pageSize: this.#pageSize,
+        desde,
+        hasta,
+        ultima,
+        derivado: this.#pageSizeConfigurado === undefined,
+      },
       'recorrido',
     );
     if (desde > 1) {
@@ -277,7 +284,10 @@ class PjSource implements Fuente<RegistroPj> {
         { campos: nombres.slice(0, 8).join(', '), conocidos: CAMPOS_BUSQUEDA.join(', ') },
       );
     }
-    this.#log.debug({ form: form.id, reconocidos: reconocidos.join(', ') }, 'vista de búsqueda reconocida');
+    this.#log.debug(
+      { form: form.id, reconocidos: reconocidos.join(', ') },
+      'vista de búsqueda reconocida',
+    );
   }
 
   /**
@@ -332,7 +342,12 @@ class PjSource implements Fuente<RegistroPj> {
     this.#metrics.increment('sources.busquedas');
 
     this.#log.info(
-      { total: this.#total, pageSize: this.#pageSize, iterador: tabla.iterador, cabeceras: tabla.cabeceras.length },
+      {
+        total: this.#total,
+        pageSize: this.#pageSize,
+        iterador: tabla.iterador,
+        cabeceras: tabla.cabeceras.length,
+      },
       'búsqueda emitida',
     );
   }
@@ -567,11 +582,17 @@ class PjSource implements Fuente<RegistroPj> {
 
     const validado = RegistroPjSchema.safeParse(registro);
     if (!validado.success) {
-      throw this.#drift('registro-invalido', `la fila ${cruda.indice} no pasa el esquema del registro`, {
-        ...ctx,
-        indice: cruda.indice,
-        problemas: validado.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' | '),
-      });
+      throw this.#drift(
+        'registro-invalido',
+        `la fila ${cruda.indice} no pasa el esquema del registro`,
+        {
+          ...ctx,
+          indice: cruda.indice,
+          problemas: validado.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(' | '),
+        },
+      );
     }
 
     if (cruda.celdas.length === 0) this.#metrics.increment('sources.sin_celdas');
@@ -591,12 +612,18 @@ class PjSource implements Fuente<RegistroPj> {
       throw new RangoInvalidoError(FUENTE, `«desde» debe ser una página ≥ 1, llegó ${desde}`);
     }
     if (desde > ultima) {
-      throw new RangoInvalidoError(FUENTE, `«desde» es ${desde} y el resultado tiene ${ultima} página(s)`);
+      throw new RangoInvalidoError(
+        FUENTE,
+        `«desde» es ${desde} y el resultado tiene ${ultima} página(s)`,
+      );
     }
 
     const pedido = opts.hasta ?? ultima;
     if (!Number.isInteger(pedido) || pedido < desde) {
-      throw new RangoInvalidoError(FUENTE, `«hasta» (${pedido}) no puede ser menor que «desde» (${desde})`);
+      throw new RangoInvalidoError(
+        FUENTE,
+        `«hasta» (${pedido}) no puede ser menor que «desde» (${desde})`,
+      );
     }
     const hasta = Math.min(pedido, ultima);
     if (pedido > ultima) this.#log.info({ pedido, ultima }, 'el rango se acota a la última página');

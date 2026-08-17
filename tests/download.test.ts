@@ -56,7 +56,8 @@ const montar = async (...args: Parametros): Promise<Banco> => {
   return banco;
 };
 
-type Parametros = Parameters<typeof montarDescargas> extends [string, ...infer Resto] ? Resto : never;
+type Parametros =
+  Parameters<typeof montarDescargas> extends [string, ...infer Resto] ? Resto : never;
 
 const archivos = (): string[] => archivosDe(dir);
 const contenido = (nombre: string): string => contenidoDe(dir, nombre);
@@ -112,7 +113,9 @@ describe('alineación del ViewState (§5.4)', () => {
     const [pagina] = await recolectar(fuente, { hasta: 1 });
     const fila = pagina?.filas[0];
 
-    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, { viewState: pagina?.viewState ?? '' }));
+    const res = await view.streamCommand(
+      view.prepareCommand(fila?.descarga ?? {}, { viewState: pagina?.viewState ?? '' }),
+    );
 
     expect(res.headers['content-type']).toBe('application/octet-stream');
   });
@@ -124,7 +127,9 @@ describe('alineación del ViewState (§5.4)', () => {
 
     // Misma sesión, misma fila, mismos campos: lo único que cambia es de qué
     // página viene el token. Es el experimento del bloque 1, palabra por palabra.
-    const res = await view.streamCommand(view.prepareCommand(fila?.descarga ?? {}, { viewState: segunda?.viewState ?? '' }));
+    const res = await view.streamCommand(
+      view.prepareCommand(fila?.descarga ?? {}, { viewState: segunda?.viewState ?? '' }),
+    );
 
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
@@ -388,7 +393,9 @@ describe('nombres de archivo', () => {
   it('sin resolución cae al expediente, y sin ninguno de los dos al identificador solo', () => {
     const conExpediente = { expediente: '2007-053', resolucion: '' } as RegistroOefa;
     expect(nombreDeArchivoOefa(conExpediente, 'abc')).toBe('abc_2007-053.pdf');
-    expect(nombreDeArchivoOefa({ expediente: '', resolucion: '' } as RegistroOefa, 'abc')).toBe('abc.pdf');
+    expect(nombreDeArchivoOefa({ expediente: '', resolucion: '' } as RegistroOefa, 'abc')).toBe(
+      'abc.pdf',
+    );
   });
 
   it('no deja escapar la barra del número de resolución a una ruta', () => {

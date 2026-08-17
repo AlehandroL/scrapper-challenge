@@ -111,7 +111,11 @@ describe('el año de la resolución', () => {
     const h = buscar(
       revisar([
         reg(0),
-        reg(1, { resolucion: 'Información confidencial', documentoUuid: null, anioResolucion: null }),
+        reg(1, {
+          resolucion: 'Información confidencial',
+          documentoUuid: null,
+          anioResolucion: null,
+        }),
       ]),
       'anio-sin-parsear',
     );
@@ -128,7 +132,10 @@ describe('documentos compartidos', () => {
    */
   it('cuenta los que dos registros comparten sin marcarlo como problema', () => {
     const h = buscar(
-      revisar([reg(0), reg(1, { documentoUuid: 'uuid-0', expediente: 'exp-0', resolucion: '000-2016-OEFA/TFA' })]),
+      revisar([
+        reg(0),
+        reg(1, { documentoUuid: 'uuid-0', expediente: 'exp-0', resolucion: '000-2016-OEFA/TFA' }),
+      ]),
       'documento-compartido',
     );
 

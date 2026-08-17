@@ -183,7 +183,9 @@ describe('withRetry', () => {
       throw new AccessDeniedError(CTX);
     });
 
-    await expect(withRetry(fn, RETRY_DEFAULTS, { sleep })).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(withRetry(fn, RETRY_DEFAULTS, { sleep })).rejects.toBeInstanceOf(
+      AccessDeniedError,
+    );
 
     // Insistir sobre un 403 es cómo un throttling temporal escala a ban de IP.
     expect(fn).toHaveBeenCalledTimes(1);

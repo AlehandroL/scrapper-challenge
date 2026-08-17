@@ -106,7 +106,10 @@ export function parsearArgs(argv: readonly string[]): OpcionesCli {
       },
     });
   } catch (error) {
-    throw new Error(`Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    throw new Error(
+      `Argumentos inválidos: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
   }
 
   const { values } = parsed;
@@ -225,7 +228,10 @@ export async function main(argv: readonly string[]): Promise<number> {
   try {
     checkpoint = opciones.reiniciar ? undefined : leerCheckpoint(opciones.checkpoint);
   } catch (error) {
-    logger.warn({ error: error instanceof Error ? error.message : String(error) }, 'checkpoint ilegible: se ignora');
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error) },
+      'checkpoint ilegible: se ignora',
+    );
   }
 
   const plan = planificarReanudacion(checkpoint, {
@@ -276,7 +282,9 @@ export async function main(argv: readonly string[]): Promise<number> {
   const alInterrumpir = (): void => {
     if (interrumpido) process.exit(SALIDA.interrumpida);
     interrumpido = true;
-    console.error('\n  interrupción recibida: cerrando al terminar la página (Ctrl-C otra vez para cortar ya)');
+    console.error(
+      '\n  interrupción recibida: cerrando al terminar la página (Ctrl-C otra vez para cortar ya)',
+    );
   };
   process.on('SIGINT', alInterrumpir);
 
@@ -397,7 +405,9 @@ function reportarFallo(error: unknown, ultimaPagina: number, metrics: Metrics): 
   if (error instanceof SourceError) {
     console.error(`\n✗ ${error.name} [${error.kind}]: ${error.message}`);
   } else {
-    console.error(`\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
+    console.error(
+      `\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+    );
   }
   // Fuera de la rama de `SourceError`: un fallo de red deja el archivo igual de
   // consistente, y no decirlo obliga a adivinar si hay algo que borrar.

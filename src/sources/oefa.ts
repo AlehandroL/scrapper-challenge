@@ -147,7 +147,10 @@ class OefaSource implements Fuente<RegistroOefa> {
     const ultima = Math.max(1, Math.ceil(this.#total / this.#pageSize));
     const { desde, hasta } = this.#rango(opts, ultima);
 
-    this.#log.info({ total: this.#total, pageSize: this.#pageSize, desde, hasta, ultima }, 'recorrido');
+    this.#log.info(
+      { total: this.#total, pageSize: this.#pageSize, desde, hasta, ultima },
+      'recorrido',
+    );
 
     for (let numero = desde; numero <= hasta; numero += 1) {
       yield await this.#leerPaginaConRecuperacion(numero, (numero - 1) * this.#pageSize, ultima);
@@ -201,12 +204,18 @@ class OefaSource implements Fuente<RegistroOefa> {
       throw new RangoInvalidoError(FUENTE, `«desde» debe ser una página ≥ 1, llegó ${desde}`);
     }
     if (desde > ultima) {
-      throw new RangoInvalidoError(FUENTE, `«desde» es ${desde} y el resultado tiene ${ultima} página(s)`);
+      throw new RangoInvalidoError(
+        FUENTE,
+        `«desde» es ${desde} y el resultado tiene ${ultima} página(s)`,
+      );
     }
 
     const pedido = opts.hasta ?? ultima;
     if (!Number.isInteger(pedido) || pedido < desde) {
-      throw new RangoInvalidoError(FUENTE, `«hasta» (${pedido}) no puede ser menor que «desde» (${desde})`);
+      throw new RangoInvalidoError(
+        FUENTE,
+        `«hasta» (${pedido}) no puede ser menor que «desde» (${desde})`,
+      );
     }
     // Pedir de más se acota; pedir de menos no. `--hasta 9999` es la forma
     // natural de decir «todas» desde una línea de comandos.
@@ -245,16 +254,23 @@ class OefaSource implements Fuente<RegistroOefa> {
     this.#verificarEncabezado(tabla);
 
     if (tabla.total === undefined) {
-      throw this.#drift('sin-total', 'la búsqueda no reportó `rowCount`: sin total no hay última página');
+      throw this.#drift(
+        'sin-total',
+        'la búsqueda no reportó `rowCount`: sin total no hay última página',
+      );
     }
 
     // Un total que cambia a mitad de corrida invalida todos los offsets
     // posteriores: seguir produce un archivo con huecos que parece completo.
     if (this.#buscada && tabla.total !== this.#total) {
-      throw this.#drift('total-inestable', `el total pasó de ${this.#total} a ${tabla.total} entre búsquedas`, {
-        antes: this.#total,
-        ahora: tabla.total,
-      });
+      throw this.#drift(
+        'total-inestable',
+        `el total pasó de ${this.#total} a ${tabla.total} entre búsquedas`,
+        {
+          antes: this.#total,
+          ahora: tabla.total,
+        },
+      );
     }
 
     this.#total = tabla.total;
@@ -284,7 +300,8 @@ class OefaSource implements Fuente<RegistroOefa> {
 
     // El paginador es una segunda fuente del total, por un camino distinto al
     // `rowCount` del script. Que coincidan lo convierte en un dato verificado.
-    const paginador = tabla.paginadorTexto === undefined ? undefined : parsePaginador(tabla.paginadorTexto);
+    const paginador =
+      tabla.paginadorTexto === undefined ? undefined : parsePaginador(tabla.paginadorTexto);
     if (paginador !== undefined && tabla.total !== undefined && paginador.total !== tabla.total) {
       this.#advertir('el paginador y el widget no reportan el mismo total', {
         widget: tabla.total,
@@ -316,7 +333,10 @@ class OefaSource implements Fuente<RegistroOefa> {
       }
       this.#recuperaciones += 1;
       this.#metrics.increment('sources.recuperaciones');
-      this.#log.warn({ pagina: numero, first }, 'vista caída: reconstruyendo y rehaciendo la búsqueda');
+      this.#log.warn(
+        { pagina: numero, first },
+        'vista caída: reconstruyendo y rehaciendo la búsqueda',
+      );
 
       // `recover()` restablece protocolo; el estado de aplicación —qué se estaba
       // buscando— es de esta capa, que es exactamente lo que §5.1 pide y la razón
@@ -393,7 +413,11 @@ class OefaSource implements Fuente<RegistroOefa> {
       pageSize: this.#pageSize,
       total: this.#total,
     };
-    const ctxDrift: ContextoDrift = { pagina: numero, first, esperadas: Math.min(this.#pageSize, this.#total - first) };
+    const ctxDrift: ContextoDrift = {
+      pagina: numero,
+      first,
+      esperadas: Math.min(this.#pageSize, this.#total - first),
+    };
 
     this.#conMetrica(() =>
       verificarForma(
@@ -404,7 +428,9 @@ class OefaSource implements Fuente<RegistroOefa> {
     );
 
     const capturadoEn = new Date().toISOString();
-    const filas = tabla.filas.map((cruda) => this.#construirFila(cruda, numero, capturadoEn, ctxDrift));
+    const filas = tabla.filas.map((cruda) =>
+      this.#construirFila(cruda, numero, capturadoEn, ctxDrift),
+    );
 
     const avisos = this.#conMetrica(() =>
       verificarIdentidades(
@@ -488,16 +514,23 @@ class OefaSource implements Fuente<RegistroOefa> {
     // tenerlo: si falla, lo que se rompió es un supuesto, no un dato.
     const validado = RegistroOefaSchema.safeParse(registro);
     if (!validado.success) {
-      throw this.#drift('registro-invalido', `la fila ${cruda.indice} no pasa el esquema del registro`, {
-        ...ctx,
-        indice: cruda.indice,
-        problemas: validado.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(' | '),
-      });
+      throw this.#drift(
+        'registro-invalido',
+        `la fila ${cruda.indice} no pasa el esquema del registro`,
+        {
+          ...ctx,
+          indice: cruda.indice,
+          problemas: validado.error.issues
+            .map((i) => `${i.path.join('.')}: ${i.message}`)
+            .join(' | '),
+        },
+      );
     }
 
     // Campos vacíos: se cuentan, no detienen. Una resolución sin unidad
     // fiscalizable es variación del origen; el porcentaje lo reporta §6.3.
-    if (cruda.campos.administrados.length === 0) this.#metrics.increment('sources.sin_administrado');
+    if (cruda.campos.administrados.length === 0)
+      this.#metrics.increment('sources.sin_administrado');
     if (cruda.campos.expediente === '') this.#metrics.increment('sources.sin_expediente');
 
     return { registro, descarga: conDocumento ? cruda.documento.comando : undefined };

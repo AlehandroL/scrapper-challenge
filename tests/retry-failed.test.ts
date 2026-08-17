@@ -118,7 +118,10 @@ describe('planificar', () => {
 });
 
 describe('reconciliar', () => {
-  const plan = { pendientes: [entrada('a'), entrada('b')], agotadas: [entrada('z', { intentos: 9 })] };
+  const plan = {
+    pendientes: [entrada('a'), entrada('b')],
+    agotadas: [entrada('z', { intentos: 9 })],
+  };
   const ahora = '2026-08-14T13:00:00.000Z';
 
   it('lo que se resolvió sale de la cola', () => {
@@ -141,7 +144,12 @@ describe('reconciliar', () => {
   it('lo que no apareció se marca no-encontrado y envejece', () => {
     const quedan = reconciliar(plan, resumen(['b']), [], true, ahora);
 
-    expect(quedan[0]).toMatchObject({ id: 'a', error: 'no-encontrado', intentos: 2, ultimoTs: ahora });
+    expect(quedan[0]).toMatchObject({
+      id: 'a',
+      error: 'no-encontrado',
+      intentos: 2,
+      ultimoTs: ahora,
+    });
   });
 
   /** Si la corrida se cortó, no se llegó a mirar: la entrada se conserva tal cual. */
@@ -209,6 +217,8 @@ describe('el camino completo, contra el portal falso', () => {
     // reintenta para siempre y nunca llega a agotar el presupuesto.
     expect(nuevos[0]?.intentos).toBeGreaterThan(elegida.intentos);
 
-    expect(reconciliar({ pendientes: [elegida], agotadas: [] }, segunda, nuevos, true, 'x')).toEqual(nuevos);
+    expect(
+      reconciliar({ pendientes: [elegida], agotadas: [] }, segunda, nuevos, true, 'x'),
+    ).toEqual(nuevos);
   });
 });

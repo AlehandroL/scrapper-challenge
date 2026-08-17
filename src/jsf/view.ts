@@ -181,11 +181,17 @@ export class JsfView {
       throw new BootstrapError(
         this.#pageUrl,
         'form-not-found',
-        this.#formId === undefined ? 'el documento no tiene ningún <form>' : `no existe el form «${this.#formId}»`,
+        this.#formId === undefined
+          ? 'el documento no tiene ningún <form>'
+          : `no existe el form «${this.#formId}»`,
       );
     }
     if (form.viewState === undefined) {
-      throw new BootstrapError(this.#pageUrl, 'no-view-state', `el form «${form.id}» no trae javax.faces.ViewState`);
+      throw new BootstrapError(
+        this.#pageUrl,
+        'no-view-state',
+        `el form «${form.id}» no trae javax.faces.ViewState`,
+      );
     }
 
     // La aserción que hace seguro sacar el `;jsessionid=` de las URLs: si la
@@ -193,7 +199,10 @@ export class JsfView {
     // trescientas páginas con la tabla vacía (§2.5). Se comprueba contra el
     // action —la URL a la que efectivamente va el POST— y no contra pageUrl,
     // que es la que tiene que resolver el matcheo de dominio y path del jar.
-    if (this.#requireSessionCookie && !(await this.#deps.session.hasCookie(form.action, this.#sessionCookie))) {
+    if (
+      this.#requireSessionCookie &&
+      !(await this.#deps.session.hasCookie(form.action, this.#sessionCookie))
+    ) {
       throw new BootstrapError(
         this.#pageUrl,
         'no-session',
@@ -208,7 +217,10 @@ export class JsfView {
     this.#deps.metrics.increment('jsf.bootstraps');
     this.#absorb(form.viewState);
 
-    this.#log.debug({ form: form.id, campos: form.campos.size, generacion: this.#generation }, 'vista lista');
+    this.#log.debug(
+      { form: form.id, campos: form.campos.size, generacion: this.#generation },
+      'vista lista',
+    );
     return form;
   }
 
@@ -276,7 +288,10 @@ export class JsfView {
     this.#formsHermanos = new Map(todos.filter((f) => f.id !== form.id).map((f) => [f.id, f]));
     this.#html = html;
     this.#absorb(form.viewState);
-    this.#log.debug({ form: form.id, campos: form.campos.size, hermanos: this.#formsHermanos.size }, 'página adoptada');
+    this.#log.debug(
+      { form: form.id, campos: form.campos.size, hermanos: this.#formsHermanos.size },
+      'página adoptada',
+    );
     return form;
   }
 
@@ -308,10 +323,17 @@ export class JsfView {
     params: Readonly<Record<string, string>>,
     opts: { readonly viewState?: string; readonly formId?: string } = {},
   ): JsfRequest {
-    const form = opts.formId === undefined ? this.#requireForm('prepareCommand') : this.#requireFormId(opts.formId);
+    const form =
+      opts.formId === undefined
+        ? this.#requireForm('prepareCommand')
+        : this.#requireFormId(opts.formId);
     return {
       url: form.action,
-      body: buildCommandBody(form, opts.viewState ?? this.#requireViewState('prepareCommand'), params),
+      body: buildCommandBody(
+        form,
+        opts.viewState ?? this.#requireViewState('prepareCommand'),
+        params,
+      ),
       headers: { Referer: this.#pageUrl },
     };
   }
@@ -335,7 +357,11 @@ export class JsfView {
 
     if (partial.error !== undefined) {
       this.#deps.metrics.increment('jsf.view_expired');
-      throw new ViewExpiredError(req.url, 'error', `${partial.error.name}: ${partial.error.message}`);
+      throw new ViewExpiredError(
+        req.url,
+        'error',
+        `${partial.error.name}: ${partial.error.message}`,
+      );
     }
 
     // El `<redirect>` es la otra cara de la misma condición, y en OEFA es la
@@ -361,7 +387,10 @@ export class JsfView {
     opts: { readonly formId?: string; readonly cfg?: AxiosRequestConfig } = {},
   ): Promise<AxiosResponse<string>> {
     const { cfg } = opts;
-    const req = this.prepareCommand(params, opts.formId === undefined ? {} : { formId: opts.formId });
+    const req = this.prepareCommand(
+      params,
+      opts.formId === undefined ? {} : { formId: opts.formId },
+    );
     const res = await this.#deps.session.postForm(req.url, req.body, {
       ...cfg,
       headers: { ...req.headers, ...cfg?.headers },
@@ -396,7 +425,10 @@ export class JsfView {
     return this.#deps.session.stream(req.url, {
       method: 'post',
       data: req.body.toString(),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', ...req.headers },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        ...req.headers,
+      },
     });
   }
 

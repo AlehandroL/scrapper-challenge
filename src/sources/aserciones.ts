@@ -118,10 +118,15 @@ export function verificarForma(
   // 2. Cantidad exacta. Comparar contra `min(pageSize, total - first)` cubre la
   //    última página sin un caso especial que después haya que recordar mantener.
   if (indices.length !== esperadas) {
-    throw drift(ctx.fuente, 'pagina-incompleta', `llegaron ${indices.length} filas y correspondían ${esperadas}`, {
-      ...base,
-      observadas: indices.length,
-    });
+    throw drift(
+      ctx.fuente,
+      'pagina-incompleta',
+      `llegaron ${indices.length} filas y correspondían ${esperadas}`,
+      {
+        ...base,
+        observadas: indices.length,
+      },
+    );
   }
 
   // 3. Los índices. Es el oráculo del bean reiniciado: si el servidor ignoró el
@@ -216,7 +221,11 @@ export function verificarIdentidades(
  * `undefined` en todas las páginas menos la primera, y un parámetro que casi
  * siempre es `undefined` termina ignorándose.
  */
-export function verificarPageSize(fuente: string, declarado: number | undefined, configurado: number): void {
+export function verificarPageSize(
+  fuente: string,
+  declarado: number | undefined,
+  configurado: number,
+): void {
   if (declarado === undefined || declarado === configurado) return;
   throw drift(
     fuente,
@@ -227,6 +236,11 @@ export function verificarPageSize(fuente: string, declarado: number | undefined,
   );
 }
 
-function drift(fuente: string, tipo: TipoDrift, detalle: string, contexto: ContextoDrift): StructuralDriftError {
+function drift(
+  fuente: string,
+  tipo: TipoDrift,
+  detalle: string,
+  contexto: ContextoDrift,
+): StructuralDriftError {
   return new StructuralDriftError(fuente, tipo, detalle, contexto);
 }

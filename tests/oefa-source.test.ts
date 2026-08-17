@@ -27,7 +27,12 @@ import {
 } from '../src/sources/errors.ts';
 import type { RegistroOefa } from '../src/sources/oefa-rows.ts';
 import type { Fuente, Pagina } from '../src/sources/types.ts';
-import { startJsfServer, uuidSintetico, type JsfTestServer, type OpcionesDataset } from './helpers/jsf-server.ts';
+import {
+  startJsfServer,
+  uuidSintetico,
+  type JsfTestServer,
+  type OpcionesDataset,
+} from './helpers/jsf-server.ts';
 
 let server: JsfTestServer;
 let metrics: Metrics;
@@ -60,7 +65,10 @@ async function montar(
   return createOefaSource({ view, logger: silentLogger, metrics }, opts);
 }
 
-const recolectar = async (fuente: Fuente<RegistroOefa>, opts = {}): Promise<Pagina<RegistroOefa>[]> => {
+const recolectar = async (
+  fuente: Fuente<RegistroOefa>,
+  opts = {},
+): Promise<Pagina<RegistroOefa>[]> => {
   const paginas: Pagina<RegistroOefa>[] = [];
   for await (const p of fuente.recorrer(opts)) paginas.push(p);
   return paginas;
@@ -114,7 +122,9 @@ describe('recorrido contra los fixtures reales', () => {
     await recolectar(fuente, { hasta: 1 });
 
     expect(server.posts).toHaveLength(1);
-    expect(server.posts[0]?.fields.get('javax.faces.source')).toBe('listarDetalleInfraccionRAAForm:btnBuscar');
+    expect(server.posts[0]?.fields.get('javax.faces.source')).toBe(
+      'listarDetalleInfraccionRAAForm:btnBuscar',
+    );
   });
 
   /**
@@ -181,7 +191,9 @@ describe('rango del recorrido', () => {
     const fuente = await montar({ total: 100 });
     await recolectar(fuente, { desde: 5, hasta: 5 });
 
-    const paginacion = server.posts.filter((p) => p.fields.get('javax.faces.behavior.event') === 'page');
+    const paginacion = server.posts.filter(
+      (p) => p.fields.get('javax.faces.behavior.event') === 'page',
+    );
     expect(paginacion).toHaveLength(1);
     expect(paginacion[0]?.fields.get('listarDetalleInfraccionRAAForm:dt_first')).toBe('40');
   });
@@ -192,14 +204,13 @@ describe('rango del recorrido', () => {
     expect(await recolectar(fuente, { hasta: 9999 })).toHaveLength(3);
   });
 
-  it.each([
-    [{ desde: 0 }],
-    [{ desde: 99 }],
-    [{ desde: 3, hasta: 2 }],
-  ])('rechaza el rango %j', async (opts) => {
-    const fuente = await montar({ total: 23 });
-    await expect(recolectar(fuente, opts)).rejects.toBeInstanceOf(RangoInvalidoError);
-  });
+  it.each([[{ desde: 0 }], [{ desde: 99 }], [{ desde: 3, hasta: 2 }]])(
+    'rechaza el rango %j',
+    async (opts) => {
+      const fuente = await montar({ total: 23 });
+      await expect(recolectar(fuente, opts)).rejects.toBeInstanceOf(RangoInvalidoError);
+    },
+  );
 });
 
 describe('detección de drift (§6.4)', () => {
@@ -315,7 +326,15 @@ describe('detección de drift (§6.4)', () => {
    * chequeo; se avisa y se sigue.
    */
   it('los rótulos cambiados avisan pero no detienen', async () => {
-    const cabeceras = ['Nro.', 'N° de expediente', 'Administrado', 'Unidad', 'Sector', 'Resolución', 'Archivo'];
+    const cabeceras = [
+      'Nro.',
+      'N° de expediente',
+      'Administrado',
+      'Unidad',
+      'Sector',
+      'Resolución',
+      'Archivo',
+    ];
     const fuente = await montar({ total: 12, cabeceras });
 
     expect(await recolectar(fuente)).toHaveLength(2);

@@ -136,7 +136,9 @@ async function main(): Promise<number> {
   );
 
   const s = metrics.snapshot();
-  console.log(`\n  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+  console.log(
+    `\n  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`,
+  );
   console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
 
   paso('OK — el adapter del Poder Judicial funciona contra su fuente');

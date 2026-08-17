@@ -87,7 +87,9 @@ const DESCRIPTORES: Record<NombreFuente, DescriptorFuente> = {
     crear: (deps, opts = {}) =>
       createOefaSource(deps, {
         pageSize: opts.pageSize ?? 10,
-        ...(opts.maxRecuperaciones === undefined ? {} : { maxRecuperaciones: opts.maxRecuperaciones }),
+        ...(opts.maxRecuperaciones === undefined
+          ? {}
+          : { maxRecuperaciones: opts.maxRecuperaciones }),
       }),
   },
   pj: {
@@ -102,7 +104,9 @@ const DESCRIPTORES: Record<NombreFuente, DescriptorFuente> = {
     crear: (deps, opts = {}) =>
       createPjSource(deps, {
         ...(opts.pageSize === undefined ? {} : { pageSize: opts.pageSize }),
-        ...(opts.maxRecuperaciones === undefined ? {} : { maxRecuperaciones: opts.maxRecuperaciones }),
+        ...(opts.maxRecuperaciones === undefined
+          ? {}
+          : { maxRecuperaciones: opts.maxRecuperaciones }),
       }),
   },
 };
@@ -141,7 +145,13 @@ export const colaPorDefecto = (fuente: string): string => `data/${fuente}.failed
 export const documentosPorDefecto = (fuente: string): string => `data/${fuente}`;
 
 function validar(
-  esquema: { safeParse: (v: unknown) => { success: boolean; data?: unknown; error?: { issues: { path: PropertyKey[]; message: string }[] } } },
+  esquema: {
+    safeParse: (v: unknown) => {
+      success: boolean;
+      data?: unknown;
+      error?: { issues: { path: PropertyKey[]; message: string }[] };
+    };
+  },
   valor: unknown,
 ): RegistroBase | string {
   const resultado = esquema.safeParse(valor);

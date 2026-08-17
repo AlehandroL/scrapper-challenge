@@ -38,7 +38,13 @@ export const FORM_DETALLE = 'frmDetalle2';
 /** El iterador del ejemplo de §2.1: `formBusqueda:repeat:0:j_idt158`. */
 export const ITERADOR = 'repeat';
 
-export const CABECERAS = ['Nro.', 'Órgano jurisdiccional', 'Materia', 'Sumilla', 'Resolución'] as const;
+export const CABECERAS = [
+  'Nro.',
+  'Órgano jurisdiccional',
+  'Materia',
+  'Sumilla',
+  'Resolución',
+] as const;
 
 export interface OpcionesPortalPj {
   readonly total: number;
@@ -120,7 +126,8 @@ function onclickJsfcljs(formId: string, pares: Readonly<Record<string, string>>)
   );
 }
 
-const escapar = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+const escapar = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promise<PortalPj> {
   const posts: URLSearchParams[] = [];
@@ -134,7 +141,8 @@ export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promis
   let emitirCookie = true;
   let desalojos = 0;
   let paginacionesServidas = 0;
-  let trampasRestantes = opts.dataset.expirarEnPagina === undefined ? 0 : (opts.dataset.expirarVeces ?? 1);
+  let trampasRestantes =
+    opts.dataset.expirarEnPagina === undefined ? 0 : (opts.dataset.expirarVeces ?? 1);
 
   /**
    * Las vistas vivas: token → offset que ese token restaura.
@@ -172,9 +180,10 @@ export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promis
       // que este no lo haga.
       const fuente = opts.dataset.filasIdenticas?.includes(global) === true ? global - 1 : global;
       const uuid = `uuid-${fuente}`;
-      const prefijo = opts.dataset.sinIterador === true
-        ? `${FORM}:celda${local}`
-        : `${FORM}:${ITERADOR}:${local}:j_idt158`;
+      const prefijo =
+        opts.dataset.sinIterador === true
+          ? `${FORM}:celda${local}`
+          : `${FORM}:${ITERADOR}:${local}:j_idt158`;
 
       const sinDoc = opts.dataset.filasSinDocumento?.includes(global) === true;
       const roto = opts.dataset.onclickRoto?.includes(global) === true;
@@ -182,7 +191,9 @@ export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promis
       const enlace = sinDoc
         ? '<span>Reservado</span>'
         : `<a id="${prefijo}" href="#" onclick="${escapar(
-            roto ? "jsf.util.chain(this,event,'mojarra.jsfcljs(???)')" : onclickJsfcljs(FORM_DETALLE, { [prefijo]: prefijo, uuid }),
+            roto
+              ? "jsf.util.chain(this,event,'mojarra.jsfcljs(???)')"
+              : onclickJsfcljs(FORM_DETALLE, { [prefijo]: prefijo, uuid }),
           )}">Ver Resolución</a>`;
 
       // Cuando la fila no tiene enlace hace falta igual un componente con el id
@@ -212,7 +223,9 @@ export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promis
     return (
       `<table><thead><tr>${CABECERAS.map((c) => `<th>${c}</th>`).join('')}</tr></thead>` +
       `<tbody>${filas.join('')}</tbody></table>` +
-      (opts.dataset.sinTotal === true ? '' : `<div class="tot">Se encontraron ${total} resultados</div>`) +
+      (opts.dataset.sinTotal === true
+        ? ''
+        : `<div class="tot">Se encontraron ${total} resultados</div>`) +
       `<div class="pag">${siguiente}</div>` +
       `<input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="${token}" autocomplete="off" />`
     );
@@ -232,12 +245,12 @@ export async function startPortalPj(opts: { dataset: OpcionesPortalPj }): Promis
 <input id="${FORM}:buCorteselValue" name="${FORM}:buCorte" type="hidden" value="0" />
 <input id="${FORM}:buAnioselValue" name="${FORM}:buAnio" type="hidden" />
 ${
-      opts.dataset.sinBotonBuscar === true
-        ? '<!-- la celda del botón viene vacía, como en el snapshot de 2025 -->'
-        : `<input type="submit" name="${FORM}:j_idt65" value="Buscar" onclick="${escapar(
-            onclickJsfcljs(FORM, { [`${FORM}:j_idt65`]: `${FORM}:j_idt65`, [`${FORM}:j_idt66`]: '' }),
-          )}" />`
-    }
+  opts.dataset.sinBotonBuscar === true
+    ? '<!-- la celda del botón viene vacía, como en el snapshot de 2025 -->'
+    : `<input type="submit" name="${FORM}:j_idt65" value="Buscar" onclick="${escapar(
+        onclickJsfcljs(FORM, { [`${FORM}:j_idt65`]: `${FORM}:j_idt65`, [`${FORM}:j_idt66`]: '' }),
+      )}" />`
+}
 ${cuerpo}
 </form>
 <form id="frmDetalle" name="frmDetalle" method="post" action="${RUTA_VISTA}">
@@ -286,7 +299,8 @@ ${cuerpo}
       const esBusqueda = campos.has(`${FORM}:j_idt65`);
       const offset = opts.dataset.noAvanza === true ? 0 : esBusqueda ? 0 : offsetVigente + pageSize;
 
-      hits[esBusqueda ? 'busqueda' : 'paginacion'] = (hits[esBusqueda ? 'busqueda' : 'paginacion'] ?? 0) + 1;
+      hits[esBusqueda ? 'busqueda' : 'paginacion'] =
+        (hits[esBusqueda ? 'busqueda' : 'paginacion'] ?? 0) + 1;
 
       // La sesión que caduca a mitad de corrida. Se cuenta por paginaciones
       // servidas y no por offset porque tras recuperarse el adapter vuelve a

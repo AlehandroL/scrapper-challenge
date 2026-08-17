@@ -85,7 +85,7 @@ describe('partial-response', () => {
    * partial-response y el error aparece mucho después, disfrazado de otra cosa.
    */
   it('una página HTML que empieza con <?xml NO es un partial-response', () => {
-    expect(DESCARGA_A.startsWith("<?xml")).toBe(true);
+    expect(DESCARGA_A.startsWith('<?xml')).toBe(true);
     expect(parsePartialResponse(DESCARGA_A).esPartial).toBe(false);
     expect(parsePartialResponse(BOOTSTRAP).esPartial).toBe(false);
   });
@@ -265,7 +265,9 @@ describe('form', () => {
   });
 
   it('stripJsessionid respeta el resto de la URL', () => {
-    expect(stripJsessionid('https://h/a/b.xhtml;jsessionid=ABC123?x=1')).toBe('https://h/a/b.xhtml?x=1');
+    expect(stripJsessionid('https://h/a/b.xhtml;jsessionid=ABC123?x=1')).toBe(
+      'https://h/a/b.xhtml?x=1',
+    );
     expect(stripJsessionid('https://h/a/b.xhtml')).toBe('https://h/a/b.xhtml');
   });
 
@@ -347,7 +349,9 @@ describe('datatable', () => {
   });
 
   it('isEmptyTable reconoce la marca de PrimeFaces', () => {
-    expect(isEmptyTable('<tr class="ui-widget-content ui-datatable-empty-message"><td></td></tr>')).toBe(true);
+    expect(
+      isEmptyTable('<tr class="ui-widget-content ui-datatable-empty-message"><td></td></tr>'),
+    ).toBe(true);
     expect(isEmptyTable(filas)).toBe(false);
   });
 
@@ -421,7 +425,9 @@ describe('mojarra.jsfcljs', () => {
 
   /** Un apóstrofo dentro de un valor es la razón por la que esto no usa JSON.parse. */
   it('no se rompe con un apóstrofo dentro de un valor', () => {
-    const comando = parseJsfcljs("mojarra.jsfcljs(document.getElementById('f'),{'f:b':'f:b','razon':'O\\'Higgins S.A.'},'')");
+    const comando = parseJsfcljs(
+      "mojarra.jsfcljs(document.getElementById('f'),{'f:b':'f:b','razon':'O\\'Higgins S.A.'},'')",
+    );
     expect(comando?.params['razon']).toBe("O'Higgins S.A.");
   });
 });

@@ -34,7 +34,8 @@ export async function startTestServer(): Promise<TestServer> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const ruta = url.pathname;
     const n = (hits[ruta] = (hits[ruta] ?? 0) + 1);
-    const num = (clave: string, porDefecto: number) => Number(url.searchParams.get(clave) ?? porDefecto);
+    const num = (clave: string, porDefecto: number) =>
+      Number(url.searchParams.get(clave) ?? porDefecto);
 
     switch (ruta) {
       case '/ok':
@@ -76,7 +77,10 @@ export async function startTestServer(): Promise<TestServer> {
       /** 429 con `Retry-After` en formato HTTP-date (la otra forma del RFC 9110). */
       case '/retry-after-date':
         if (n <= num('times', 1)) {
-          res.setHeader('Retry-After', new Date(Date.now() + num('seconds', 2) * 1000).toUTCString());
+          res.setHeader(
+            'Retry-After',
+            new Date(Date.now() + num('seconds', 2) * 1000).toUTCString(),
+          );
           return responder(res, 429, 'calmate');
         }
         return responder(res, 200, 'ok');

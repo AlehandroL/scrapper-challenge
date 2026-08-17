@@ -86,12 +86,16 @@ async function main(): Promise<number> {
 
     // Con el token de la página 2: el servidor re-renderiza la página y no manda
     // el documento. El cuerpo llega en streaming, así que se destruye a mano.
-    const desalineada = await view.streamCommand(view.prepareCommand(fila.descarga, { viewState: segunda.viewState }));
+    const desalineada = await view.streamCommand(
+      view.prepareCommand(fila.descarga, { viewState: segunda.viewState }),
+    );
     desalineada.data.destroy();
     const tipoDesalineado = String(desalineada.headers['content-type'] ?? '');
 
     // Con el de la página 1: el PDF.
-    const alineada = await view.streamCommand(view.prepareCommand(fila.descarga, { viewState: primera.viewState }));
+    const alineada = await view.streamCommand(
+      view.prepareCommand(fila.descarga, { viewState: primera.viewState }),
+    );
     const cabecera: Buffer = await new Promise((resolve) => {
       alineada.data.once('data', (trozo: Buffer) => {
         alineada.data.destroy();
@@ -102,8 +106,12 @@ async function main(): Promise<number> {
     const magic = cabecera.subarray(0, 5).toString('latin1');
 
     console.log(`    token de la página 2 → ${desalineada.status} ${tipoDesalineado}`);
-    console.log(`    token de la página 1 → ${alineada.status} ${tipoAlineado} · ${JSON.stringify(magic)}`);
-    console.log(`    content-disposition  → ${String(alineada.headers['content-disposition'] ?? '(ausente)')}`);
+    console.log(
+      `    token de la página 1 → ${alineada.status} ${tipoAlineado} · ${JSON.stringify(magic)}`,
+    );
+    console.log(
+      `    content-disposition  → ${String(alineada.headers['content-disposition'] ?? '(ausente)')}`,
+    );
 
     paso('2/2  Dos descargas reales, con validación y manifiesto');
 
@@ -122,13 +130,18 @@ async function main(): Promise<number> {
 
     for (const entrada of manifiesto) {
       console.log(`    ${entrada.archivo}`);
-      console.log(`      ${(entrada.bytes / 1e6).toFixed(2)} MB · sha256 ${entrada.sha256.slice(0, 16)}…`);
+      console.log(
+        `      ${(entrada.bytes / 1e6).toFixed(2)} MB · sha256 ${entrada.sha256.slice(0, 16)}…`,
+      );
       console.log(`      servidor: ${entrada.nombreServidor ?? '(sin content-disposition)'}`);
     }
 
     paso('Comprobaciones');
     const comprobaciones: [string, boolean][] = [
-      ['el token desalineado devuelve HTML en vez del documento', tipoDesalineado.includes('text/html')],
+      [
+        'el token desalineado devuelve HTML en vez del documento',
+        tipoDesalineado.includes('text/html'),
+      ],
       ['el token alineado devuelve un binario', !tipoAlineado.includes('text/html')],
       ['el cuerpo alineado empieza con %PDF-', magic === '%PDF-'],
       ['se bajaron los dos documentos pedidos', resumen.descargados === 2],
@@ -140,7 +153,9 @@ async function main(): Promise<number> {
 
     paso('Métricas de la corrida');
     const s = metrics.snapshot();
-    console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
+    console.log(
+      `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`,
+    );
     console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
     console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
 
@@ -160,7 +175,10 @@ async function main(): Promise<number> {
 main().then(
   (codigo) => process.exit(codigo),
   (error: unknown) => {
-    console.error('\n✗ El smoke falló:', error instanceof Error ? `${error.name}: ${error.message}` : error);
+    console.error(
+      '\n✗ El smoke falló:',
+      error instanceof Error ? `${error.name}: ${error.message}` : error,
+    );
     process.exit(1);
   },
 );

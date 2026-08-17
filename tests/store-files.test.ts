@@ -76,7 +76,9 @@ describe('guardarStream', () => {
   it('no deja el temporal si el rename final falla', async () => {
     mkdirSync(destino, { recursive: true });
 
-    await expect(guardarStream(Readable.from([Buffer.from(PDF)]), destino, { magic: '%PDF-' })).rejects.toThrow();
+    await expect(
+      guardarStream(Readable.from([Buffer.from(PDF)]), destino, { magic: '%PDF-' }),
+    ).rejects.toThrow();
     expect(existsSync(`${destino}${SUFIJO_TEMPORAL}`)).toBe(false);
   });
 
@@ -86,11 +88,11 @@ describe('guardarStream', () => {
    * `.pdf` que son páginas web.
    */
   it('rechaza un cuerpo que no empieza con el magic y no toca el destino', async () => {
-    const html = '<?xml version=\'1.0\'?><!DOCTYPE html><html><body>página completa</body></html>';
+    const html = "<?xml version='1.0'?><!DOCTYPE html><html><body>página completa</body></html>";
 
-    await expect(guardarStream(Readable.from([Buffer.from(html)]), destino, { magic: '%PDF-' })).rejects.toMatchObject(
-      { name: 'ArchivoInvalidoError', motivo: 'magic' },
-    );
+    await expect(
+      guardarStream(Readable.from([Buffer.from(html)]), destino, { magic: '%PDF-' }),
+    ).rejects.toMatchObject({ name: 'ArchivoInvalidoError', motivo: 'magic' });
     expect(existsSync(destino)).toBe(false);
     expect(existsSync(`${destino}${SUFIJO_TEMPORAL}`)).toBe(false);
   });
@@ -101,21 +103,27 @@ describe('guardarStream', () => {
    * y validar después— deja medio HTML en el temporal.
    */
   it('valida el magic aunque llegue partido en varios chunks', async () => {
-    const { bytes } = await guardarStream(enTrozos(PDF, 2), destino, { magic: '%PDF-', tamanoMinimo: 10 });
+    const { bytes } = await guardarStream(enTrozos(PDF, 2), destino, {
+      magic: '%PDF-',
+      tamanoMinimo: 10,
+    });
     expect(bytes).toBe(Buffer.byteLength(PDF));
     expect(readFileSync(destino, 'latin1')).toBe(PDF);
   });
 
   it('un cuerpo más corto que el magic tampoco pasa', async () => {
-    await expect(guardarStream(Readable.from([Buffer.from('%PD')]), destino, { magic: '%PDF-' })).rejects.toMatchObject(
-      { motivo: 'magic' },
-    );
+    await expect(
+      guardarStream(Readable.from([Buffer.from('%PD')]), destino, { magic: '%PDF-' }),
+    ).rejects.toMatchObject({ motivo: 'magic' });
     expect(existsSync(destino)).toBe(false);
   });
 
   it('rechaza un cuerpo por debajo del tamaño mínimo', async () => {
     await expect(
-      guardarStream(Readable.from([Buffer.from('%PDF-')]), destino, { magic: '%PDF-', tamanoMinimo: 1024 }),
+      guardarStream(Readable.from([Buffer.from('%PDF-')]), destino, {
+        magic: '%PDF-',
+        tamanoMinimo: 1024,
+      }),
     ).rejects.toMatchObject({ name: 'ArchivoInvalidoError', motivo: 'tamano' });
     expect(existsSync(destino)).toBe(false);
   });
@@ -128,7 +136,9 @@ describe('guardarStream', () => {
   it('destruye el stream cuando el cuerpo no sirve', async () => {
     const origen = Readable.from([Buffer.from('no soy un pdf, ni de lejos')]);
 
-    await expect(guardarStream(origen, destino, { magic: '%PDF-' })).rejects.toBeInstanceOf(ArchivoInvalidoError);
+    await expect(guardarStream(origen, destino, { magic: '%PDF-' })).rejects.toBeInstanceOf(
+      ArchivoInvalidoError,
+    );
     expect(origen.destroyed).toBe(true);
   });
 
@@ -140,7 +150,9 @@ describe('guardarStream', () => {
       },
     });
 
-    await expect(guardarStream(origen, destino, { magic: '%PDF-' })).rejects.toThrow('ECONNRESET simulado');
+    await expect(guardarStream(origen, destino, { magic: '%PDF-' })).rejects.toThrow(
+      'ECONNRESET simulado',
+    );
     expect(existsSync(destino)).toBe(false);
     expect(existsSync(`${destino}${SUFIJO_TEMPORAL}`)).toBe(false);
   });

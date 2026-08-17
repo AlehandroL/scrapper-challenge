@@ -42,16 +42,21 @@ describe('separación de capas', () => {
     ]);
   });
 
-  it.each(['ViewState', 'partial-response', 'mojarra', 'primefaces', 'oefa', 'jurisprudencia', 'jsessionid'])(
-    'src/http/ no depende de «%s»',
-    (termino) => {
-      const culpables = archivos
-        .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
-        .map((a) => a.nombre);
+  it.each([
+    'ViewState',
+    'partial-response',
+    'mojarra',
+    'primefaces',
+    'oefa',
+    'jurisprudencia',
+    'jsessionid',
+  ])('src/http/ no depende de «%s»', (termino) => {
+    const culpables = archivos
+      .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+      .map((a) => a.nombre);
 
-      expect(culpables).toEqual([]);
-    },
-  );
+    expect(culpables).toEqual([]);
+  });
 
   it('src/http/ no importa de capas superiores', () => {
     const culpables = archivos
@@ -225,14 +230,21 @@ describe('la capa de dominio no conoce el transporte', () => {
    * también el adapter del Poder Judicial. Todo su contenido tiene que depender
    * del offset, del tamaño de página y del total — y de nada más.
    */
-  it.each(['oefa', 'jurisprudencia', 'expediente', 'resoluci', 'primefaces', 'richfaces', 'data-ri'])(
-    'aserciones.ts no menciona «%s»',
-    (termino) => {
-      const aserciones = archivos.find((a) => a.nombre === 'aserciones.ts');
-      expect(aserciones).toBeDefined();
-      expect(soloCodigo(aserciones?.contenido ?? '').toLowerCase()).not.toContain(termino.toLowerCase());
-    },
-  );
+  it.each([
+    'oefa',
+    'jurisprudencia',
+    'expediente',
+    'resoluci',
+    'primefaces',
+    'richfaces',
+    'data-ri',
+  ])('aserciones.ts no menciona «%s»', (termino) => {
+    const aserciones = archivos.find((a) => a.nombre === 'aserciones.ts');
+    expect(aserciones).toBeDefined();
+    expect(soloCodigo(aserciones?.contenido ?? '').toLowerCase()).not.toContain(
+      termino.toLowerCase(),
+    );
+  });
 
   /**
    * El adapter del Poder Judicial no puede usar `jsf/datatable.ts` para leer la
@@ -243,9 +255,15 @@ describe('la capa de dominio no conoce el transporte', () => {
    */
   it('pj-rows.ts solo toma wrapRows de la capa de PrimeFaces', () => {
     const pj = archivos.find((a) => a.nombre === 'pj-rows.ts')?.contenido ?? '';
-    const importado = /import\s*\{([^}]*)\}\s*from\s*'\.\.\/jsf\/datatable\.ts'/.exec(pj)?.[1] ?? '';
+    const importado =
+      /import\s*\{([^}]*)\}\s*from\s*'\.\.\/jsf\/datatable\.ts'/.exec(pj)?.[1] ?? '';
 
-    expect(importado.split(',').map((s) => s.trim()).filter(Boolean)).toEqual(['wrapRows']);
+    expect(
+      importado
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ).toEqual(['wrapRows']);
   });
 });
 
@@ -279,16 +297,13 @@ describe('la capa de persistencia no conoce el dominio', () => {
     // `%PDF-` sería el atajo obvio y la primera grieta. El magic lo pasa el
     // llamador, y el día que haya que bajar un XLSX esta capa no se toca.
     'pdf',
-  ])(
-    'src/store/ no depende de «%s»',
-    (termino) => {
-      const culpables = archivos
-        .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
-        .map((a) => a.nombre);
+  ])('src/store/ no depende de «%s»', (termino) => {
+    const culpables = archivos
+      .filter((a) => soloCodigo(a.contenido).toLowerCase().includes(termino.toLowerCase()))
+      .map((a) => a.nombre);
 
-      expect(culpables).toEqual([]);
-    },
-  );
+    expect(culpables).toEqual([]);
+  });
 
   it('src/store/ no importa de ninguna otra capa del proyecto', () => {
     const culpables = archivos

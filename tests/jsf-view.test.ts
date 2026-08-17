@@ -92,7 +92,10 @@ describe('bootstrap', () => {
   it('sin cookie de sesión falla duro, no en la página 300', async () => {
     server.dropSessions();
     await expect(vista().bootstrap()).rejects.toThrow(BootstrapError);
-    await expect(vista().bootstrap()).rejects.toMatchObject({ reason: 'no-session', recoverable: false });
+    await expect(vista().bootstrap()).rejects.toMatchObject({
+      reason: 'no-session',
+      recoverable: false,
+    });
   });
 
   it('la aserción de cookie se puede desactivar para el caso sin cookies', async () => {
