@@ -58,6 +58,26 @@ export class Metrics {
   }
 }
 
+/**
+ * Las líneas de salud de la corrida, iguales en el camino feliz y en el de
+ * fallo.
+ *
+ * Existen como función y no copiadas en cada CLI porque los caminos de fallo
+ * eran los que se quedaban cortos: `download` imprimía **solo** `contadores` —el
+ * mapa de extensión, vacío si la corrida murió antes de bajar nada— y `scrape`
+ * no imprimía nada. Un `contadores: {}` como todo diagnóstico esconde el
+ * `requests=3 fallidos=3 reintentos=2` que sí estaba medido y sí explica lo que
+ * pasó.
+ */
+export function lineasDeSalud(s: MetricsSnapshot): string[] {
+  const contadores = Object.keys(s.contadores).length === 0 ? '(ninguno)' : JSON.stringify(s.contadores);
+  return [
+    `  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  fallidos=${s.fallidos}  reintentos=${s.reintentos}`,
+    `  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`,
+    `  contadores: ${contadores}`,
+  ];
+}
+
 function percentil(ordenadas: readonly number[], p: number): number {
   if (ordenadas.length === 0) return 0;
   const indice = Math.min(ordenadas.length - 1, Math.floor(p * ordenadas.length));

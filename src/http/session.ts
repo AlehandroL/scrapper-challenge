@@ -27,10 +27,12 @@ import type { Metrics } from '../obs/metrics.ts';
 import type { CircuitBreaker } from './circuit-breaker.ts';
 import {
   AccessDeniedError,
+  HostUnreachableError,
   NetworkError,
   ServerUnavailableError,
   ThrottledError,
   UnexpectedStatusError,
+  esHostInalcanzable,
   type ErrorContext,
   type TransportError,
 } from './errors.ts';
@@ -139,8 +141,14 @@ export function createSession(deps: SessionDeps, opts: SessionOptions = {}): Ses
           res = await instance.request<T>({ ...cfg, validateStatus: () => true });
         } catch (error) {
           deps.metrics.fallidos += 1;
-          const err = reportar(aNetworkError(error, ctx), deps);
-          log.warn({ url: redactUrl(ctx.url), code: err.code, attempt }, 'fallo de red');
+          const err = reportar(aErrorDeRed(error, ctx), deps);
+          // `attempt + 1` y no `attempt`: `withRetry()` cuenta desde cero, pero la
+          // línea de «reintentando» cuenta desde uno. Con dos numeraciones para el
+          // mismo evento, el log se lee como el doble de intentos de los que hubo.
+          log.warn(
+            { url: redactUrl(ctx.url), code: err.code, kind: err.kind, attempt: attempt + 1 },
+            'fallo de red',
+          );
           throw err;
         }
 
@@ -295,9 +303,15 @@ function descartarCuerpo(data: unknown): void {
   }
 }
 
-function aNetworkError(error: unknown, ctx: ErrorContext): NetworkError {
+/**
+ * Elige entre «el socket se cortó» y «el host no está». Son dos políticas
+ * opuestas —insistir vs. frenar y avisar— y por eso son dos clases.
+ */
+function aErrorDeRed(error: unknown, ctx: ErrorContext): NetworkError | HostUnreachableError {
   if (axios.isAxiosError(error)) {
-    return new NetworkError(ctx, error.code, error.message);
+    return esHostInalcanzable(error.code)
+      ? new HostUnreachableError(ctx, error.code, error.message)
+      : new NetworkError(ctx, error.code, error.message);
   }
   const detalle = error instanceof Error ? error.message : String(error);
   // Sin código conocido `NetworkError` se marca no reintentable: envolver un bug

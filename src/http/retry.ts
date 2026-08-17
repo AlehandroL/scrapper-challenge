@@ -29,6 +29,8 @@ export interface RetryOptions {
   readonly unavailable: RetryBudget;
   /** Fallos de socket/DNS/timeout: transitorios y baratos de reintentar. */
   readonly network: RetryBudget;
+  /** El host no acepta conexiones: no se cura dentro del tiempo de una corrida. */
+  readonly unreachable: RetryBudget;
   /** Circuito abierto: el delay lo dicta el breaker, la base casi no se usa. */
   readonly circuitOpen: RetryBudget;
   /** Techo del backoff exponencial. */
@@ -41,6 +43,12 @@ export const RETRY_DEFAULTS: RetryOptions = {
   throttled: { maxAttempts: 5, baseMs: 1_000 },
   unavailable: { maxAttempts: 4, baseMs: 2_000 },
   network: { maxAttempts: 3, baseMs: 250 },
+  // Un intento. No es «no reintentable» por tipo sino por presupuesto, y la
+  // diferencia es práctica: subir esto a `{ maxAttempts: 3, baseMs: 2_000 }` da
+  // una ventana real de ~10 s si alguna vez conviene absorber el rebote de un
+  // balanceador, sin tocar la taxonomía. Lo que no tiene sentido es el punto
+  // medio que había —tres viajes en 400 ms—, que no es ni una cosa ni la otra.
+  unreachable: { maxAttempts: 1, baseMs: 0 },
   circuitOpen: { maxAttempts: 4, baseMs: 1_000 },
   capMs: 60_000,
   // Un `Retry-After: 3600` —por error de configuración o por hostilidad— colgaría
@@ -118,6 +126,8 @@ function presupuesto(error: TransportError, opts: RetryOptions): RetryBudget {
       return opts.unavailable;
     case 'network':
       return opts.network;
+    case 'host-unreachable':
+      return opts.unreachable;
     case 'circuit-open':
       return opts.circuitOpen;
     default:

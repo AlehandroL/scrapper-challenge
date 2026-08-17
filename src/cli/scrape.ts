@@ -25,8 +25,8 @@ import { CircuitBreaker } from '../http/circuit-breaker.ts';
 import { RateLimiter } from '../http/rate-limiter.ts';
 import { createSession } from '../http/session.ts';
 import { JsfView } from '../jsf/view.ts';
-import { createLogger } from '../obs/logger.ts';
-import { Metrics } from '../obs/metrics.ts';
+import { cerrarLogs, createLogger, vaciarLogs } from '../obs/logger.ts';
+import { Metrics, lineasDeSalud } from '../obs/metrics.ts';
 import { SourceError, RangoInvalidoError } from '../sources/errors.ts';
 import {
   FUENTES,
@@ -347,21 +347,23 @@ export async function main(argv: readonly string[]): Promise<number> {
   } catch (error) {
     writer?.close();
     process.off('SIGINT', alInterrumpir);
-    return reportarFallo(error, ultimaPagina);
+    // Antes de imprimir: el bloque humano sale por `console.error` —sincrónico—
+    // y los logs por un worker. Sin este vaciado el `✗` se adelanta a los WARN
+    // que lo explican, que fue exactamente lo que se vio con el portal caído.
+    await vaciarLogs(logger);
+    return reportarFallo(error, ultimaPagina, metrics);
   }
 
   writer?.close();
   process.off('SIGINT', alInterrumpir);
+  await vaciarLogs(logger);
 
   paso('Resumen');
   ok(`${nuevos} registro(s) nuevo(s), ${omitidos} omitido(s) por ya estar presentes`);
   ok(`última página completada: ${ultimaPagina}`);
   if (!opciones.dryRun) ok(`salida: ${opciones.salida} · checkpoint: ${opciones.checkpoint}`);
 
-  const s = metrics.snapshot();
-  console.log(`  requests=${s.requests}  ok=${s.ok}  429=${s.throttled}  reintentos=${s.reintentos}`);
-  console.log(`  latencia p50=${s.latenciaP50Ms} ms  p95=${s.latenciaP95Ms} ms`);
-  console.log(`  contadores: ${JSON.stringify(s.contadores)}`);
+  for (const linea of lineasDeSalud(metrics.snapshot())) console.log(linea);
 
   if (interrumpido) {
     paso('INTERRUMPIDA — el archivo quedó consistente; repetir el comando la retoma');
@@ -375,17 +377,24 @@ export async function main(argv: readonly string[]): Promise<number> {
  * Un drift no se arregla reintentando: se arregla mirando el sitio. Por eso el
  * mensaje dice **qué** cambió y no solo que algo falló.
  */
-function reportarFallo(error: unknown, ultimaPagina: number): number {
+function reportarFallo(error: unknown, ultimaPagina: number, metrics: Metrics): number {
+  // El único fallo sin corrida detrás: no hubo red, no hay salud que reportar.
   if (error instanceof RangoInvalidoError) {
     console.error(`\n✗ ${error.message}`);
     return SALIDA.uso;
   }
+
   if (error instanceof SourceError) {
     console.error(`\n✗ ${error.name} [${error.kind}]: ${error.message}`);
-    console.error(`  última página completada: ${ultimaPagina}. Lo escrito hasta acá es válido.`);
-    return SALIDA.fallo;
+  } else {
+    console.error(`\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
   }
-  console.error(`\n✗ ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`);
+  // Fuera de la rama de `SourceError`: un fallo de red deja el archivo igual de
+  // consistente, y no decirlo obliga a adivinar si hay algo que borrar.
+  console.error(`  última página completada: ${ultimaPagina}. Lo escrito hasta acá es válido.`);
+  // Las métricas van en los dos caminos. El resumen de una corrida que **falló**
+  // es justo el que hay que poder leer.
+  for (const linea of lineasDeSalud(metrics.snapshot())) console.error(linea);
   return SALIDA.fallo;
 }
 
@@ -393,11 +402,15 @@ function reportarFallo(error: unknown, ultimaPagina: number): number {
 // arrancar una corrida. `import.meta.filename` sería más corto pero es de Node
 // 20.11 y el `engines` del proyecto declara >=20.0.0.
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2)).then(
-    (codigo) => process.exit(codigo),
-    (error: unknown) => {
-      console.error('\n✗ Fallo no controlado:', error);
-      process.exit(SALIDA.fallo);
-    },
-  );
+  // `cerrarLogs()` antes de `process.exit()`: el transport de pino-pretty vive en
+  // un worker y `exit` no lo espera. Sin esto, las últimas líneas —las del
+  // fallo— se pierden.
+  const salir = async (codigo: number): Promise<never> => {
+    await cerrarLogs();
+    process.exit(codigo);
+  };
+  main(process.argv.slice(2)).then(salir, (error: unknown) => {
+    console.error('\n✗ Fallo no controlado:', error);
+    return salir(SALIDA.fallo);
+  });
 }
