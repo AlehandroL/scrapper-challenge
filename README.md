@@ -17,10 +17,48 @@ secundario — ver [limitaciones conocidas](#limitaciones-conocidas).
 Requiere **Node ≥ 20**. No hay servicios que levantar ni credenciales que configurar.
 
 ```bash
-npm ci                       # instalar
-npm run scrape -- --hasta 3  # tres páginas del portal a data/oefa.jsonl
-npm run validate             # sanity checks sobre lo escrito, sin red
+npm ci        # instalar — ~2 s, sin build
+npm test      # 575 tests sin red: verifica la instalación sin depender del portal
 ```
+
+Eso ya prueba que la instalación quedó bien, y no depende del portal. Contra el sitio, los
+tres comandos que muestran el recorrido entero:
+
+```bash
+# 1. recorrido: 30 registros nuevos a un archivo aparte, + informe de corrida
+npm run scrape -- --hasta 3 --salida data/demo.jsonl
+
+# 2. descarga: 2 PDFs a data/demo/, con su manifiesto y sha256
+npm run download -- --max-descargas 2 --destino data/demo --manifiesto data/demo.descargas.jsonl
+
+# 3. informe de validación sobre la entrega: 25 chequeos, 0 errores
+npm run validate
+```
+
+Cada uno imprime su propio informe al cerrar: requests, `429`, reintentos, latencias
+p50/p95 y contadores por capa.
+
+**Los dos primeros escriben a `data/demo*` a propósito**, y vale la pena saber por qué: la
+entrega —[`data/oefa.jsonl`](data/oefa.jsonl) y su manifiesto— **viene commiteada**, y
+`scrape` es idempotente. Contra las rutas por defecto, el paso 1 recorre las tres páginas,
+encuentra que ya están todas y cierra con `0 registro(s) nuevo(s), 1.749 omitido(s)`: no
+falla —hizo los 4 requests y parseó las 3 páginas— pero no hay cómo distinguirlo de que no
+hizo nada. Apuntando a un archivo nuevo se ve el trabajo, y la entrega queda intacta para
+que el paso 3 la valide limpia. (`--reiniciar` logra lo mismo sobre las rutas por defecto;
+por qué el destino de la descarga también importa está en
+[cómo se valida](#cómo-se-valida).)
+
+**Si el portal no responde**, el error lo dice con todas las letras y sugiere el `curl` de
+comprobación. El diagnóstico completo —incluido si está caído para todos o filtrado contra
+tu IP— es un comando:
+
+```bash
+bash scripts/check-access.sh
+```
+
+OEFA es un portal público de disponibilidad irregular: se lo vio caído para todo el mundo
+—`ECONNREFUSED` desde 15 nodos externos, con el control del mismo `/24` respondiendo— más
+de una vez durante el desarrollo. Nada de la verificación sin red depende de él.
 
 ## Qué produjo
 
@@ -36,13 +74,20 @@ npm run validate             # sanity checks sobre lo escrito, sin red
 
 Sin `--hasta`, `scrape` recorre el dataset completo: 176 páginas, ~6 minutos. Es
 **reanudable e idempotente**: repetirlo completa lo que falte sin duplicar registros ni
-volver a pedir páginas ya leídas.
+volver a pedir páginas ya leídas. Esa es la propiedad que hace que un clon recién bajado
+—que ya trae el dataset— reporte `0 registro(s) nuevo(s)`; ver el
+[quickstart](#quickstart).
 
 ```bash
 npm run download -- --max-descargas 2  # dos PDFs a data/oefa/ — pesan ~9 MB cada uno
 ```
 
-Lo que falle en la descarga queda en una cola y se reintenta con `npm run retry-failed`.
+Este sí escribe archivos nuevos en un clon limpio: los binarios no se versionan, así que
+`data/oefa/` ni siquiera existe, y las 30 entradas del manifiesto commiteado se saltean por
+id —bajando dos que todavía no estaban—. Lo que falle queda en una cola y se reintenta con
+`npm run retry-failed`. Ojo con el efecto sobre el informe: crear `data/oefa/` habilita el
+chequeo de integridad, que a partir de ahí reporta los 30 PDFs ausentes —ver
+[cómo se valida](#cómo-se-valida)—.
 
 Verificación sin red:
 
@@ -106,7 +151,8 @@ reproducida acá dentro, y un test exige que no quede ninguna sin fila.
 
 **Los cinco smokes quedan fuera de `npm test` a propósito.** La suite no debe depender de
 la red ni golpear un sitio real en cada push: sería exactamente lo que el rate limiter
-existe para evitar. CI corre `typecheck` + `test` contra Node 20, 22 y 24.
+existe para evitar. CI corre los cinco pasos sin red —`typecheck`, `lint`, `format:check`,
+`test` y `validate`— contra Node 20, 22 y 24.
 
 ### Flags
 
@@ -205,9 +251,25 @@ porque los binarios no se versionan— la integridad de los archivos se reporta 
 `✓`. Un informe que dice «los 30 archivos están bien» sin haber abierto uno es peor que no
 tener informe, porque además da confianza.
 
+Ese nivel tiene una consecuencia que conviene anticipar, porque en la práctica sorprende:
+**basta con que `data/oefa/` exista para que los `–` se vuelvan `✗`.** Una descarga parcial
+en un clon recién bajado —`npm run download -- --max-descargas 2` contra el destino por
+defecto— crea la carpeta con dos archivos, y a partir de ahí la sonda sí puede mirar el
+disco y reporta que los otros 30 del manifiesto no están. Es el chequeo haciendo
+exactamente su trabajo: antes no sabía, ahora sabe. Por eso el [quickstart](#quickstart)
+manda la demo a `data/demo/`, y por eso la re-verificación de los 30 PDFs entregados pide
+apuntar `--descargas` a donde estén de verdad.
+
 Lo mismo con la cobertura: sin un total declarado, el archivo solo prueba una **cota
 inferior**, y una corrida cortada en la última página se ve idéntica a una completa. De ahí
 sale `--contra-el-sitio`.
+
+Hay un tercer camino para ese total, y es el que deja el [quickstart](#quickstart) sin
+pedir nada extra: cualquier `scrape` —aunque sea de tres páginas— anota en su checkpoint el
+total que declaró el portal, y `validate` lo levanta de ahí. En un clon recién bajado la
+cobertura sale `–`; después de correr el paso 1, sale
+`✓ 1.749 presente(s) + 4 deduplicada(s) = 1.753, el total del checkpoint de «scrape»`. Sin
+red, `--total <n>` hace lo mismo a mano.
 
 Hay además un test que corre este mismo informe sobre los archivos commiteados y exige cero
 errores: tener sanity checks y haberlos corrido no son lo mismo.

@@ -17,6 +17,14 @@ descargas/
 # porque los .jsonl que viven ahí sí son la entrega.
 data/*/
 
+# La corrida de prueba del quickstart del README escribe a data/demo*: es para
+# ver el scraper funcionando sin tocar la entrega, así que no es un entregable.
+# Sin esta línea, quien sigue el quickstart y hace `git add -A` se lleva los
+# artefactos de la demo al commit — data/*/ ya cubre la carpeta data/demo/, pero
+# no los .jsonl sueltos, que viven al mismo nivel que los de la entrega.
+data/demo.jsonl
+data/demo.*.jsonl
+
 # Estado de reanudación: es de cada corrida y de cada máquina, no un entregable.
 *.checkpoint.json
 
